@@ -77,11 +77,19 @@ Essas são para funcionalidades futuras (pagamentos, Redis, etc.):
 # Redis - Para produção, use Redis (desenvolvimento pode usar memory)
 # REDIS_URL=redis://localhost:6379
 # REDIS_PASSWORD=senha-do-redis (opcional)
-# ORDER_STATE_STORAGE=memory  # ou 'redis' para produção
-# CONVERSATION_STORAGE=memory  # ou 'redis' para produção (conversas ativas)
-# ONBOARDING_STORAGE=memory    # ou 'redis' para produção (estado de onboarding)
-# ACTIVE_CONVERSATION_TTL=1800  # TTL em segundos para conversas ativas (padrão: 30min)
-# ONBOARDING_STATE_TTL=86400    # TTL em segundos para estado de onboarding (padrão: 24h)
+# ORDER_STATE_STORAGE=redis      # 'redis' para produção, 'memory' para desenvolvimento
+# CONVERSATION_STORAGE=redis      # 'redis' para produção, 'memory' para desenvolvimento (conversas ativas)
+# ONBOARDING_STORAGE=redis        # 'redis' para produção, 'memory' para desenvolvimento (estado de onboarding)
+# ACTIVE_CONVERSATION_TTL=1800    # TTL em segundos para conversas ativas (padrão: 30min)
+# ONBOARDING_STATE_TTL=86400      # TTL em segundos para estado de onboarding (padrão: 24h)
+#
+# 🚂 Railway:
+# - Ao adicionar serviço Redis no Railway, a variável REDIS_URL é criada automaticamente
+# - Configure também as variáveis de STORAGE:
+#   ORDER_STATE_STORAGE=redis
+#   CONVERSATION_STORAGE=redis
+#   ONBOARDING_STORAGE=redis
+# - Não precisa configurar REDIS_URL manualmente, o Railway faz isso automaticamente
 
 # WhatsApp Number - Deixe vazio por enquanto
 # WHATSAPP_NUMBER=
