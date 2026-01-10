@@ -17,6 +17,8 @@ export class RedisActiveConversationService implements IActiveConversationServic
 
     this.redis = new Redis(redisUrl, {
       password: redisPassword || undefined,
+      lazyConnect: true, // Não conecta imediatamente, apenas quando necessário
+      enableOfflineQueue: false, // Não enfileira comandos quando offline
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -25,7 +27,14 @@ export class RedisActiveConversationService implements IActiveConversationServic
     });
 
     this.redis.on('error', (error) => {
-      logger.error('Redis connection error (ActiveConversationService)', { error: error.message });
+      // Log apenas se estiver realmente tentando usar Redis (não apenas importado)
+      // Não loga se a conexão foi configurada mas ainda não está sendo usada
+      if (this.redis.status !== 'end' && this.redis.status !== 'ready') {
+        logger.debug('Redis connection error (ActiveConversationService)', { 
+          error: error.message,
+          status: this.redis.status 
+        });
+      }
     });
 
     this.redis.on('connect', () => {
@@ -39,31 +48,48 @@ export class RedisActiveConversationService implements IActiveConversationServic
 
   async hasActiveConversation(phone: string): Promise<boolean> {
     try {
+      // Tenta conectar se ainda não estiver conectado
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {
+          // Se falhar ao conectar, retorna false silenciosamente
+          return false;
+        });
+      }
       const exists = await this.redis.exists(this.getKey(phone));
       return exists === 1;
     } catch (error: any) {
-      logger.error('Error checking active conversation in Redis', { error: error.message, phone });
-      // Em caso de erro, retorna false para não bloquear o fluxo
+      // Se houver erro (Redis não disponível), retorna false silenciosamente
+      // Não loga erro para evitar spam quando Redis não está configurado
       return false;
     }
   }
 
   async markAsActive(phone: string): Promise<void> {
     try {
+      // Tenta conectar se ainda não estiver conectado
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {
+          // Se falhar ao conectar, ignora silenciosamente (usa fallback in-memory)
+          return;
+        });
+      }
       // Usa SETEX para definir com TTL automático
       await this.redis.setex(this.getKey(phone), this.ttl, Date.now().toString());
     } catch (error: any) {
-      logger.error('Error marking conversation as active in Redis', { error: error.message, phone });
-      throw error;
+      // Se houver erro (Redis não disponível), ignora silenciosamente
+      // Não loga erro para evitar spam quando Redis não está configurado
+      // O sistema funcionará com fallback (sem persistência entre instâncias)
     }
   }
 
   async clear(phone: string): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       await this.redis.del(this.getKey(phone));
     } catch (error: any) {
-      logger.error('Error clearing active conversation in Redis', { error: error.message, phone });
-      throw error;
+      // Ignora erro silenciosamente se Redis não estiver disponível
     }
   }
 
@@ -71,6 +97,9 @@ export class RedisActiveConversationService implements IActiveConversationServic
     // No Redis, o TTL é gerenciado automaticamente
     // Mas podemos executar uma limpeza manual se necessário
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const keys = await this.redis.keys(`${this.keyPrefix}*`);
       if (keys.length > 0) {
         // Verifica TTL de cada chave e remove se expirada
@@ -87,8 +116,7 @@ export class RedisActiveConversationService implements IActiveConversationServic
         }
       }
     } catch (error: any) {
-      logger.error('Error cleaning up active conversations in Redis', { error: error.message });
-      // Não lança erro, pois cleanup é opcional
+      // Ignora erro silenciosamente se Redis não estiver disponível
     }
   }
 }

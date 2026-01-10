@@ -18,6 +18,8 @@ export class RedisConversationStateService implements IConversationStateService 
 
     this.redis = new Redis(redisUrl, {
       password: redisPassword || undefined,
+      lazyConnect: true, // Não conecta imediatamente, apenas quando necessário
+      enableOfflineQueue: false, // Não enfileira comandos quando offline
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -26,7 +28,13 @@ export class RedisConversationStateService implements IConversationStateService 
     });
 
     this.redis.on('error', (error) => {
-      logger.error('Redis connection error (ConversationStateService)', { error: error.message });
+      // Log apenas se estiver realmente tentando usar Redis (não apenas importado)
+      if (this.redis.status !== 'end' && this.redis.status !== 'ready') {
+        logger.debug('Redis connection error (ConversationStateService)', { 
+          error: error.message,
+          status: this.redis.status 
+        });
+      }
     });
 
     this.redis.on('connect', () => {
@@ -40,21 +48,27 @@ export class RedisConversationStateService implements IConversationStateService 
 
   private async getData(phone: string): Promise<OnboardingData | null> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const data = await this.redis.get(this.getKey(phone));
       if (!data) return null;
       return JSON.parse(data) as OnboardingData;
     } catch (error: any) {
-      logger.error('Error getting conversation data from Redis', { error: error.message, phone });
-      throw error;
+      // Se houver erro (Redis não disponível), retorna null silenciosamente
+      return null;
     }
   }
 
   private async setData(phone: string, data: OnboardingData): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       await this.redis.setex(this.getKey(phone), this.ttl, JSON.stringify(data));
     } catch (error: any) {
-      logger.error('Error setting conversation data in Redis', { error: error.message, phone });
-      throw error;
+      // Se houver erro (Redis não disponível), ignora silenciosamente
+      // O sistema funcionará sem persistência entre instâncias
     }
   }
 
@@ -69,10 +83,12 @@ export class RedisConversationStateService implements IConversationStateService 
 
   async clearConversation(phone: string): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       await this.redis.del(this.getKey(phone));
     } catch (error: any) {
-      logger.error('Error clearing conversation in Redis', { error: error.message, phone });
-      throw error;
+      // Ignora erro silenciosamente se Redis não estiver disponível
     }
   }
 

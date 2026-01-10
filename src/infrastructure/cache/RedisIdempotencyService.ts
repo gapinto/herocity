@@ -13,6 +13,8 @@ export class RedisIdempotencyService implements IIdempotencyService {
 
     this.redis = new Redis(redisUrl, {
       password: redisPassword || undefined,
+      lazyConnect: true, // Não conecta imediatamente, apenas quando necessário
+      enableOfflineQueue: false, // Não enfileira comandos quando offline
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -21,7 +23,13 @@ export class RedisIdempotencyService implements IIdempotencyService {
     });
 
     this.redis.on('error', (error) => {
-      logger.error('Redis idempotency connection error', { error: error.message });
+      // Log apenas se estiver realmente tentando usar Redis (não apenas importado)
+      if (this.redis.status !== 'end' && this.redis.status !== 'ready') {
+        logger.debug('Redis idempotency connection error', { 
+          error: error.message,
+          status: this.redis.status 
+        });
+      }
     });
   }
 
@@ -31,29 +39,38 @@ export class RedisIdempotencyService implements IIdempotencyService {
 
   async isProcessed(key: string): Promise<boolean> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const exists = await this.redis.exists(this.getKey(key));
       return exists === 1;
     } catch (error: any) {
-      logger.error('Error checking idempotency', { error: error.message, key });
-      // Em caso de erro, retorna false para permitir processamento (fail open)
+      // Em caso de erro (Redis não disponível), retorna false para permitir processamento (fail open)
+      // Não loga erro para evitar spam quando Redis não está configurado
       return false;
     }
   }
 
   async getResult<T>(key: string): Promise<T | null> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const resultKey = `${this.getKey(key)}:result`;
       const data = await this.redis.get(resultKey);
       if (!data) return null;
       return JSON.parse(data) as T;
     } catch (error: any) {
-      logger.error('Error getting idempotency result', { error: error.message, key });
+      // Se houver erro (Redis não disponível), retorna null silenciosamente
       return null;
     }
   }
 
   async markAsProcessed(key: string, ttl: number = this.defaultTtl, result?: any): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const mainKey = this.getKey(key);
       await this.redis.setex(mainKey, ttl, '1');
       
@@ -63,8 +80,8 @@ export class RedisIdempotencyService implements IIdempotencyService {
         await this.redis.setex(resultKey, ttl, JSON.stringify(result));
       }
     } catch (error: any) {
-      logger.error('Error marking as processed', { error: error.message, key });
-      // Não lança erro para não bloquear o fluxo principal
+      // Se houver erro (Redis não disponível), ignora silenciosamente
+      // Não loga erro para evitar spam quando Redis não está configurado
     }
   }
 

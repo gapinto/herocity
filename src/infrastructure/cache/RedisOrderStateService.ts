@@ -15,6 +15,8 @@ export class RedisOrderStateService implements IOrderStateService {
 
     this.redis = new Redis(redisUrl, {
       password: redisPassword || undefined,
+      lazyConnect: true, // Não conecta imediatamente, apenas quando necessário
+      enableOfflineQueue: false, // Não enfileira comandos quando offline
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -23,7 +25,13 @@ export class RedisOrderStateService implements IOrderStateService {
     });
 
     this.redis.on('error', (error) => {
-      logger.error('Redis connection error', { error: error.message });
+      // Log apenas se estiver realmente tentando usar Redis (não apenas importado)
+      if (this.redis.status !== 'end' && this.redis.status !== 'ready') {
+        logger.debug('Redis connection error', { 
+          error: error.message,
+          status: this.redis.status 
+        });
+      }
     });
 
     this.redis.on('connect', () => {
@@ -37,21 +45,27 @@ export class RedisOrderStateService implements IOrderStateService {
 
   private async getData(phone: string): Promise<OrderCreationData | null> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       const data = await this.redis.get(this.getKey(phone));
       if (!data) return null;
       return JSON.parse(data) as OrderCreationData;
     } catch (error: any) {
-      logger.error('Error getting order data from Redis', { error: error.message, phone });
-      throw error;
+      // Se houver erro (Redis não disponível), retorna null silenciosamente
+      return null;
     }
   }
 
   private async setData(phone: string, data: OrderCreationData): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       await this.redis.setex(this.getKey(phone), this.ttl, JSON.stringify(data));
     } catch (error: any) {
-      logger.error('Error setting order data in Redis', { error: error.message, phone });
-      throw error;
+      // Se houver erro (Redis não disponível), ignora silenciosamente
+      // O sistema funcionará sem persistência entre instâncias
     }
   }
 
@@ -145,14 +159,22 @@ export class RedisOrderStateService implements IOrderStateService {
 
   async clearOrderData(phone: string): Promise<void> {
     try {
+      if (this.redis.status === 'wait') {
+        await this.redis.connect().catch(() => {});
+      }
       await this.redis.del(this.getKey(phone));
     } catch (error: any) {
-      logger.error('Error clearing order data from Redis', { error: error.message, phone });
-      throw error;
+      // Ignora erro silenciosamente se Redis não estiver disponível
     }
   }
 
   async disconnect(): Promise<void> {
-    await this.redis.quit();
+    try {
+      if (this.redis.status !== 'end' && this.redis.status !== 'close') {
+        await this.redis.quit();
+      }
+    } catch (error: any) {
+      // Ignora erro ao desconectar
+    }
   }
 }

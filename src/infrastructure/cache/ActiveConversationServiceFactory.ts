@@ -9,6 +9,12 @@ export class ActiveConversationServiceFactory {
   static create(storage?: ActiveConversationStorage): IActiveConversationService {
     const selectedStorage = storage || (process.env.CONVERSATION_STORAGE as ActiveConversationStorage) || 'memory';
 
+    // Se tentar usar Redis mas não houver REDIS_URL configurado, usa memory
+    if (selectedStorage === 'redis' && !process.env.REDIS_URL) {
+      logger.warn('CONVERSATION_STORAGE=redis mas REDIS_URL não está definido. Usando memory.');
+      return new InMemoryActiveConversationService();
+    }
+
     switch (selectedStorage) {
       case 'redis':
         logger.info('Using RedisActiveConversationService');
