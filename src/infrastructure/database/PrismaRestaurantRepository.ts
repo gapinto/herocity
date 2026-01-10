@@ -96,8 +96,15 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
       paymentAccountId: restaurant.getPaymentAccountId() ?? null,
     };
 
+    // Usa phone como chave única para upsert (phone é @unique no schema)
+    // Se tiver ID válido (não vazio), usa ID, senão usa phone
+    const restaurantId = restaurant.getId();
+    const whereClause = restaurantId && restaurantId.trim() !== '' 
+      ? { id: restaurantId } 
+      : { phone: restaurant.getPhone().getValue() };
+
     const saved = await this.prisma.restaurant.upsert({
-      where: { id: restaurant.getId() || undefined },
+      where: whereClause,
       create: data,
       update: data,
     });
