@@ -23,6 +23,8 @@ import { OrderStateServiceFactory } from './infrastructure/cache/OrderStateServi
 import { PaymentServiceFactory } from './infrastructure/payment/PaymentServiceFactory';
 import { PaymentAccountServiceFactory } from './infrastructure/payment/PaymentAccountServiceFactory';
 import { IdempotencyServiceFactory } from './infrastructure/cache/IdempotencyServiceFactory';
+import { ActiveConversationServiceFactory } from './infrastructure/cache/ActiveConversationServiceFactory';
+import { ConversationStateServiceFactory } from './infrastructure/cache/ConversationStateServiceFactory';
 import { logger } from './shared/utils/logger';
 
 async function main() {
@@ -53,6 +55,8 @@ async function main() {
     const idempotencyService = IdempotencyServiceFactory.create();
     const paymentService = PaymentServiceFactory.create(undefined, idempotencyService);
     const paymentAccountService = PaymentAccountServiceFactory.create();
+    const activeConversationService = ActiveConversationServiceFactory.create();
+    const conversationStateService = ConversationStateServiceFactory.create();
 
     // Use Cases
     const createOrder = new CreateOrder(
@@ -68,6 +72,7 @@ async function main() {
     const restaurantOnboardingHandler = new RestaurantOnboardingHandler(
       evolutionApi,
       restaurantRepository,
+      conversationStateService,
       paymentAccountService
     );
     const restaurantManagementHandler = new RestaurantManagementHandler(
@@ -96,6 +101,7 @@ async function main() {
       restaurantOnboardingHandler,
       restaurantManagementHandler,
       customerOrdersHandler,
+      activeConversationService,
       idempotencyService
     );
 

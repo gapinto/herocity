@@ -8,6 +8,7 @@ import { CustomerOrdersHandler } from '../../../src/application/handlers/Custome
 import { Intent } from '../../../src/domain/enums/Intent';
 import { UserContext } from '../../../src/domain/enums/UserContext';
 import { InMemoryIdempotencyService } from '../../../src/infrastructure/cache/InMemoryIdempotencyService';
+import { IActiveConversationService } from '../../../src/domain/services/IActiveConversationService';
 
 // Mocks
 jest.mock('../../../src/infrastructure/messaging/EvolutionApiService');
@@ -23,9 +24,11 @@ describe('OrchestrationService - Filtro de mensagens', () => {
   let mockRestaurantOnboardingHandler: jest.Mocked<RestaurantOnboardingHandler>;
   let mockRestaurantManagementHandler: jest.Mocked<RestaurantManagementHandler>;
   let mockCustomerOrdersHandler: jest.Mocked<CustomerOrdersHandler>;
+  let mockActiveConversationService: jest.Mocked<IActiveConversationService>;
 
   beforeEach(() => {
     // Mock services - Reset mocks antes de cada teste
+    // IMPORTANTE: Criar os mocks ANTES de limpar, para que as referências sejam preservadas
     mockEvolutionApi = {
       sendMessage: jest.fn().mockResolvedValue({ success: true }),
     } as any;
@@ -43,6 +46,7 @@ describe('OrchestrationService - Filtro de mensagens', () => {
 
     mockRestaurantOnboardingHandler = {
       handle: jest.fn().mockResolvedValue(undefined),
+      hasActiveConversation: jest.fn().mockResolvedValue(false), // Default: sem conversa ativa (async agora)
     } as any;
 
     mockRestaurantManagementHandler = {
@@ -53,6 +57,16 @@ describe('OrchestrationService - Filtro de mensagens', () => {
       handle: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    // Mock explícito com retorno false garantido
+    // IMPORTANTE: Criar o mock e configurar ANTES de criar o serviço
+    const hasActiveConversationMock = jest.fn().mockResolvedValue(false);
+    mockActiveConversationService = {
+      hasActiveConversation: hasActiveConversationMock,
+      markAsActive: jest.fn().mockResolvedValue(undefined),
+      clear: jest.fn().mockResolvedValue(undefined),
+      cleanup: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     orchestrationService = new OrchestrationService(
       mockUserContext,
       mockIntentService,
@@ -60,15 +74,31 @@ describe('OrchestrationService - Filtro de mensagens', () => {
       mockRestaurantOnboardingHandler,
       mockRestaurantManagementHandler,
       mockCustomerOrdersHandler,
+      mockActiveConversationService,
       new InMemoryIdempotencyService()
     );
 
-    // Limpa todos os mocks antes de cada teste
+    // Limpa APENAS as chamadas (não a configuração) após criar o serviço
     jest.clearAllMocks();
+    
+    // Reconfigura explicitamente após limpar para garantir valor correto
+    // Usa mockImplementation para garantir retorno false explícito
+    hasActiveConversationMock.mockImplementation(async () => {
+      return false;
+    });
+    (mockRestaurantOnboardingHandler.hasActiveConversation as jest.Mock).mockResolvedValue(false);
   });
 
   describe('Filtro de mensagens com "hero"', () => {
     it('deve ignorar mensagens que não contenham "hero" quando não há conversa ativa', async () => {
+      // Configura explicitamente: sem conversa ativa
+      const hasActiveConvMock = mockActiveConversationService.hasActiveConversation as jest.Mock;
+      hasActiveConvMock.mockReset();
+      hasActiveConvMock.mockImplementation(async () => false);
+      
+      // Garante que userContext está limpo
+      (mockUserContext.identify as jest.Mock).mockClear();
+
       const webhook = {
         data: {
           key: {
@@ -77,20 +107,31 @@ describe('OrchestrationService - Filtro de mensagens', () => {
             fromMe: false,
           },
           message: {
-            conversation: 'mensagem qualquer sem hero',
+            conversation: 'mensagem qualquer',
           },
         },
       };
 
       await orchestrationService.handleWebhook(webhook);
 
-      // Não deve chamar nenhum serviço
+      // Verifica que hasActiveConversation foi chamado com o telefone correto
+      expect(hasActiveConvMock).toHaveBeenCalled();
+      const calls = hasActiveConvMock.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      // Verifica que foi chamado com o telefone extraído (sem @s.whatsapp.net)
+      expect(calls[0][0]).toBe('5511999999999');
+      
+      // CRUCIAL: Não deve chamar userContext.identify (mensagem foi filtrada ANTES desta chamada)
+      // Se foi chamado, significa que o filtro não retornou quando deveria
       expect(mockUserContext.identify).not.toHaveBeenCalled();
       expect(mockEvolutionApi.sendMessage).not.toHaveBeenCalled();
+      expect(mockActiveConversationService.markAsActive).not.toHaveBeenCalled();
     });
 
     it('deve processar mensagens sem "hero" quando já há conversa ativa', async () => {
       // Primeiro: inicia conversa com "hero"
+      mockActiveConversationService.hasActiveConversation.mockResolvedValueOnce(false); // Primeira mensagem não tem conversa ainda
+      mockActiveConversationService.hasActiveConversation.mockResolvedValueOnce(true); // Segunda mensagem já tem conversa ativa
       mockUserContext.identify.mockResolvedValueOnce({
         type: UserContext.NEW_USER,
       });
@@ -113,6 +154,9 @@ describe('OrchestrationService - Filtro de mensagens', () => {
       };
 
       await orchestrationService.handleWebhook(webhook1);
+
+      // Deve marcar conversa como ativa após receber "hero"
+      expect(mockActiveConversationService.markAsActive).toHaveBeenCalledWith('5511999999999');
 
       // Agora: mensagem sem "hero" deve ser processada
       mockUserContext.identify.mockResolvedValueOnce({
@@ -138,7 +182,8 @@ describe('OrchestrationService - Filtro de mensagens', () => {
 
       await orchestrationService.handleWebhook(webhook2);
 
-      // Deve processar mesmo sem "hero"
+      // Deve processar mesmo sem "hero" porque há conversa ativa
+      expect(mockActiveConversationService.hasActiveConversation).toHaveBeenCalledTimes(2);
       expect(mockUserContext.identify).toHaveBeenCalledTimes(2);
       expect(mockIntentService.identify).toHaveBeenCalledTimes(2);
     });

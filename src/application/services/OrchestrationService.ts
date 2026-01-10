@@ -9,7 +9,7 @@ import { RestaurantOnboardingHandler } from '../handlers/RestaurantOnboardingHan
 import { RestaurantManagementHandler } from '../handlers/RestaurantManagementHandler';
 import { CustomerOrdersHandler } from '../handlers/CustomerOrdersHandler';
 import { IIdempotencyService } from '../../domain/services/IIdempotencyService';
-import { ActiveConversationService } from './ActiveConversationService';
+import { IActiveConversationService } from '../../domain/services/IActiveConversationService';
 import { metricsService } from './MetricsService';
 import { structuredLogger } from '../../shared/utils/structuredLogger';
 import { logger } from '../../shared/utils/logger';
@@ -57,8 +57,6 @@ export interface MessageData {
 }
 
 export class OrchestrationService {
-  private readonly activeConversationService: ActiveConversationService;
-
   constructor(
     private readonly userContextService: UserContextService,
     private readonly intentService: IntentService,
@@ -66,10 +64,9 @@ export class OrchestrationService {
     private readonly restaurantOnboardingHandler: RestaurantOnboardingHandler,
     private readonly restaurantManagementHandler: RestaurantManagementHandler,
     private readonly customerOrdersHandler: CustomerOrdersHandler,
+    private readonly activeConversationService: IActiveConversationService,
     private readonly idempotencyService?: IIdempotencyService
-  ) {
-    this.activeConversationService = new ActiveConversationService();
-  }
+  ) {}
 
   async handleWebhook(webhook: EvolutionWebhook): Promise<void> {
     try {
@@ -81,11 +78,17 @@ export class OrchestrationService {
 
       const { from, text, pushName, mediaUrl, messageId } = parsed;
 
+      // Ignora mensagens sem texto
+      if (!text || text.trim().length === 0) {
+        return;
+      }
+
       // FILTRO: Responde apenas mensagens que contenham "hero" OU se já tiver conversa ativa
       // Isso permite iniciar o fluxo com "hero" mas continuar sem precisar repetir
       const hasHero = text.toLowerCase().includes('hero');
-      const hasActiveConversation = this.activeConversationService.hasActiveConversation(from);
+      const hasActiveConversation = await this.activeConversationService.hasActiveConversation(from);
 
+      // Retorna imediatamente se não passar no filtro
       if (!hasHero && !hasActiveConversation) {
         logger.info('Message filtered out (does not contain "hero" and no active conversation)', { 
           from, 
@@ -96,7 +99,7 @@ export class OrchestrationService {
 
       // Se contém "hero", marca conversa como ativa
       if (hasHero) {
-        this.activeConversationService.markAsActive(from);
+        await this.activeConversationService.markAsActive(from);
       }
 
       // Idempotência: verifica se mensagem já foi processada
@@ -139,6 +142,31 @@ export class OrchestrationService {
       let cleanedText = text.replace(/hero/gi, '').trim();
       if (!cleanedText) {
         cleanedText = text; // Se só tinha "hero", mantém o texto original
+      }
+
+      // IMPORTANTE: Verifica se há conversa de onboarding ativa ANTES de identificar intenção
+      // Se houver, roteia diretamente para onboarding (mesmo que intenção seja SOLICITAR_AJUDA)
+      // Isso evita enviar boas-vindas durante o processo de onboarding
+      const hasActiveOnboarding = await this.restaurantOnboardingHandler.hasActiveConversation(from);
+      if (hasActiveOnboarding) {
+        // Roteia diretamente para onboarding, ignorando identificação de intenção
+        const messageData: MessageData = {
+          from,
+          text: cleanedText,
+          pushName,
+          mediaUrl,
+          userContext: userContextResult.type,
+          restaurantId: restaurantIdFromQR || userContextResult.restaurantId,
+          customerId: userContextResult.customerId,
+          intent: Intent.RESTAURANT_ONBOARDING,
+        };
+        await this.restaurantOnboardingHandler.handle(messageData);
+        // Idempotência: marca mensagem como processada
+        if (messageId && this.idempotencyService) {
+          const idempotencyKey = `message:${messageId}`;
+          await this.idempotencyService.markAsProcessed(idempotencyKey, 86400);
+        }
+        return;
       }
 
       // Identifica intenção PRIMEIRO (antes de decidir se envia boas-vindas)

@@ -3,26 +3,33 @@ import { EvolutionApiService } from '../../infrastructure/messaging/EvolutionApi
 import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
 import { Restaurant } from '../../domain/entities/Restaurant';
 import { Phone } from '../../domain/value-objects/Phone';
-import { ConversationStateService, OnboardingState, OnboardingData } from '../services/ConversationStateService';
+import { OnboardingState, OnboardingData } from '../services/ConversationStateService';
+import { IConversationStateService } from '../../domain/services/IConversationStateService';
 import { IPaymentAccountService } from '../../domain/services/IPaymentAccountService';
 import { BankAccountData } from '../../domain/types/BankAccount';
 import { logger } from '../../shared/utils/logger';
 
 export class RestaurantOnboardingHandler {
-  private conversationState: ConversationStateService;
   private bankAccountStep: number = 0; // Para controlar múltiplas etapas de dados bancários
 
   constructor(
     private readonly evolutionApi: EvolutionApiService,
     private readonly restaurantRepository: IRestaurantRepository,
+    private readonly conversationState: IConversationStateService,
     private readonly paymentAccountService?: IPaymentAccountService
-  ) {
-    this.conversationState = new ConversationStateService();
+  ) {}
+
+  /**
+   * Verifica se há uma conversa de onboarding ativa para o telefone
+   */
+  async hasActiveConversation(phone: string): Promise<boolean> {
+    const conversation = await this.conversationState.getConversation(phone);
+    return conversation !== undefined && conversation.state !== OnboardingState.COMPLETED;
   }
 
   async handle(data: MessageData): Promise<void> {
     try {
-      const conversation = this.conversationState.getConversation(data.from);
+      const conversation = await this.conversationState.getConversation(data.from);
 
       if (!conversation) {
         // Inicia novo onboarding
@@ -42,7 +49,7 @@ export class RestaurantOnboardingHandler {
   }
 
   private async startOnboarding(from: string, pushName?: string): Promise<void> {
-    this.conversationState.startOnboarding(from);
+    await this.conversationState.startOnboarding(from);
     this.bankAccountStep = 0; // Reset bank account step
 
     const name = pushName || 'usuário';
@@ -65,7 +72,7 @@ Digite o nome do seu restaurante:`,
 
     // Permite cancelar a qualquer momento
     if (text === 'cancelar' || text === 'sair') {
-      this.conversationState.clearConversation(data.from);
+      await this.conversationState.clearConversation(data.from);
       this.bankAccountStep = 0;
       await this.evolutionApi.sendMessage({
         to: data.from,
@@ -140,8 +147,8 @@ Digite o nome do seu restaurante:`,
       return;
     }
 
-    this.conversationState.updateData(data.from, { name });
-    this.conversationState.updateState(data.from, OnboardingState.WAITING_ADDRESS);
+    await this.conversationState.updateData(data.from, { name });
+    await this.conversationState.updateState(data.from, OnboardingState.WAITING_ADDRESS);
 
     await this.evolutionApi.sendMessage({
       to: data.from,
@@ -167,8 +174,8 @@ Exemplo: Rua das Flores, 123 - Centro`,
       return;
     }
 
-    this.conversationState.updateData(data.from, { address });
-    this.conversationState.updateState(data.from, OnboardingState.WAITING_PHONE);
+    await this.conversationState.updateData(data.from, { address });
+    await this.conversationState.updateState(data.from, OnboardingState.WAITING_PHONE);
 
     await this.evolutionApi.sendMessage({
       to: data.from,
@@ -197,8 +204,8 @@ Exemplo: 81999999999`,
         return;
       }
 
-      this.conversationState.updateData(data.from, { phone: phone.getValue() });
-      this.conversationState.updateState(data.from, OnboardingState.WAITING_LEGAL_NAME);
+      await this.conversationState.updateData(data.from, { phone: phone.getValue() });
+      await this.conversationState.updateState(data.from, OnboardingState.WAITING_LEGAL_NAME);
 
       await this.evolutionApi.sendMessage({
         to: data.from,
@@ -230,8 +237,8 @@ Exemplo: João Silva ou Restaurante LTDA`,
       return;
     }
 
-    this.conversationState.updateData(data.from, { legalName });
-    this.conversationState.updateState(data.from, OnboardingState.WAITING_CPF_CNPJ);
+    await this.conversationState.updateData(data.from, { legalName });
+    await this.conversationState.updateState(data.from, OnboardingState.WAITING_CPF_CNPJ);
 
     await this.evolutionApi.sendMessage({
       to: data.from,
@@ -257,8 +264,8 @@ Exemplo: 12345678900 (CPF) ou 12345678000190 (CNPJ)`,
       return;
     }
 
-    this.conversationState.updateData(data.from, { cpfCnpj });
-    this.conversationState.updateState(data.from, OnboardingState.WAITING_EMAIL);
+    await this.conversationState.updateData(data.from, { cpfCnpj });
+    await this.conversationState.updateState(data.from, OnboardingState.WAITING_EMAIL);
 
     await this.evolutionApi.sendMessage({
       to: data.from,
@@ -285,8 +292,8 @@ Exemplo: contato@restaurante.com.br`,
       return;
     }
 
-    this.conversationState.updateData(data.from, { email });
-    this.conversationState.updateState(data.from, OnboardingState.WAITING_BANK_ACCOUNT);
+    await this.conversationState.updateData(data.from, { email });
+    await this.conversationState.updateState(data.from, OnboardingState.WAITING_BANK_ACCOUNT);
     this.bankAccountStep = 1; // Inicia coleta de dados bancários
 
     await this.evolutionApi.sendMessage({
@@ -332,7 +339,7 @@ Exemplos:
         accountType: 'CHECKING',
         accountHolderName: conversation.legalName || conversation.name || '',
       };
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 2;
 
       await this.evolutionApi.sendMessage({
@@ -356,7 +363,7 @@ Exemplo: 1234`,
 
       const bankAccount = conversation.bankAccount!;
       bankAccount.agency = agency;
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 3;
 
       await this.evolutionApi.sendMessage({
@@ -380,7 +387,7 @@ Exemplo: 12345678`,
 
       const bankAccount = conversation.bankAccount!;
       bankAccount.account = account;
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 4;
 
       await this.evolutionApi.sendMessage({
@@ -404,7 +411,7 @@ Exemplo: 5`,
 
       const bankAccount = conversation.bankAccount!;
       bankAccount.accountDigit = accountDigit;
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 5;
 
       await this.evolutionApi.sendMessage({
@@ -429,7 +436,7 @@ Digite "2" para Poupança`,
 
       const bankAccount = conversation.bankAccount!;
       bankAccount.accountType = type === '1' ? 'CHECKING' : 'SAVINGS';
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 6;
 
       await this.evolutionApi.sendMessage({
@@ -453,9 +460,9 @@ Exemplo: João Silva`,
 
       const bankAccount = conversation.bankAccount!;
       bankAccount.accountHolderName = accountHolderName;
-      this.conversationState.updateData(data.from, { bankAccount });
+      await this.conversationState.updateData(data.from, { bankAccount });
       this.bankAccountStep = 0; // Reset
-      this.conversationState.updateState(data.from, OnboardingState.WAITING_DOCUMENT);
+      await this.conversationState.updateState(data.from, OnboardingState.WAITING_DOCUMENT);
 
       await this.evolutionApi.sendMessage({
         to: data.from,
@@ -484,9 +491,9 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
 
     // Se houver mediaUrl (foto/documento), salva
     if (data.mediaUrl) {
-      this.conversationState.updateData(data.from, { documentUrl: data.mediaUrl });
+      await this.conversationState.updateData(data.from, { documentUrl: data.mediaUrl });
       // Busca conversação atualizada
-      const updatedConversation = this.conversationState.getConversation(data.from);
+      const updatedConversation = await this.conversationState.getConversation(data.from);
       if (updatedConversation) {
         await this.completeOnboardingWithPayment(data.from, updatedConversation);
       } else {
@@ -554,7 +561,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
 
       // Cria subconta no provedor de pagamento (se serviço disponível)
       if (this.paymentAccountService) {
-        this.conversationState.updateState(from, OnboardingState.CREATING_PAYMENT_ACCOUNT);
+        await this.conversationState.updateState(from, OnboardingState.CREATING_PAYMENT_ACCOUNT);
 
         await this.evolutionApi.sendMessage({
           to: from,
@@ -582,8 +589,8 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
             status: paymentAccountResponse.status,
           });
 
-          this.conversationState.clearConversation(from);
-          this.conversationState.updateState(from, OnboardingState.COMPLETED);
+          await this.conversationState.clearConversation(from);
+          await this.conversationState.updateState(from, OnboardingState.COMPLETED);
 
           await this.evolutionApi.sendMessage({
             to: from,
@@ -615,8 +622,8 @@ Digite "ajuda" para ver todos os comandos disponíveis! 🎉`,
 
           // Ainda completa onboarding mesmo se falhar criação de subconta
           // (pode ser criada depois)
-          this.conversationState.clearConversation(from);
-          this.conversationState.updateState(from, OnboardingState.COMPLETED);
+          await this.conversationState.clearConversation(from);
+          await this.conversationState.updateState(from, OnboardingState.COMPLETED);
 
           await this.evolutionApi.sendMessage({
             to: from,
@@ -635,8 +642,8 @@ Você ainda pode usar o sistema, mas não poderá receber pagamentos até config
         }
       } else {
         // Sem serviço de pagamento, completa onboarding normalmente
-        this.conversationState.clearConversation(from);
-        this.conversationState.updateState(from, OnboardingState.COMPLETED);
+        await this.conversationState.clearConversation(from);
+        await this.conversationState.updateState(from, OnboardingState.COMPLETED);
 
         await this.evolutionApi.sendMessage({
           to: from,
