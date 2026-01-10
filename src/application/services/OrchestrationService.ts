@@ -295,6 +295,7 @@ Digite o número da opção ou escreva sua escolha! 😊`;
         await this.restaurantOnboardingHandler.handle(data);
         break;
 
+      case Intent.CADASTRAR_ITEM_CARDAPIO:
       case Intent.ATUALIZAR_ESTOQUE:
       case Intent.MARCAR_PEDIDO_PREPARO:
       case Intent.MARCAR_PEDIDO_PRONTO:

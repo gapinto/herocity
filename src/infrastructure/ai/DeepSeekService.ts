@@ -63,6 +63,8 @@ INTENÇÕES DO CLIENTE:
 - solicitar_ajuda: quando não consegue processar ou há problema
 
 INTENÇÕES DO RESTAURANTE:
+- restaurant_onboarding: cadastrar novo restaurante APENAS quando é NEW_USER e digita "1", "opção 1", "cadastrar restaurante", "quero cadastrar meu restaurante", etc. NÃO usar se o restaurante já está cadastrado!
+- cadastrar_item_cardapio: adicionar itens ao cardápio quando restaurante já cadastrado pede "cadastrar cardápio", "adicionar item", "cadastrar item", "novo item no cardápio", etc.
 - atualizar_estoque: marcar itens como disponíveis/esgotados
 - marcar_pedido_preparo: iniciar preparo de pedido pago
 - marcar_pedido_pronto: notificar que pedido está pronto
@@ -70,7 +72,13 @@ INTENÇÕES DO RESTAURANTE:
 - notificar_cliente: enviar mensagens de status manualmente
 - bloquear_item_cardapio: desabilitar item temporariamente
 - desbloquear_item_cardapio: habilitar item novamente
-- restaurant_onboarding: cadastrar novo restaurante (quando usuário digita "1", "opção 1", "cadastrar restaurante", "quero cadastrar meu restaurante", etc.)
+
+IMPORTANTE SOBRE restaurant_onboarding vs cadastrar_item_cardapio:
+- Se o usuário é RESTAURANT_USER (restaurante já cadastrado) e pede "cadastrar cardápio" ou "cadastrar item", identifique como "cadastrar_item_cardapio", NÃO como "restaurant_onboarding"
+- Use "restaurant_onboarding" APENAS quando:
+  * Usuário é NEW_USER E
+  * Mensagem indica claramente cadastro de RESTAURANTE (não cardápio/item)
+  * Exemplos: "1", "opção 1", "cadastrar restaurante", "quero cadastrar meu restaurante"
 
 IMPORTANTE:
 - Se o usuário for NEW_USER e digitar apenas "1" ou "opção 1", identifique como "restaurant_onboarding"

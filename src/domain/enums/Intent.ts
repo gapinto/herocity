@@ -11,6 +11,7 @@ export enum Intent {
   
   // Restaurant intents
   RESTAURANT_ONBOARDING = 'restaurant_onboarding',
+  CADASTRAR_ITEM_CARDAPIO = 'cadastrar_item_cardapio',
   ATUALIZAR_ESTOQUE = 'atualizar_estoque',
   MARCAR_PEDIDO_PREPARO = 'marcar_pedido_preparo',
   MARCAR_PEDIDO_PRONTO = 'marcar_pedido_pronto',

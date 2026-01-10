@@ -16,7 +16,7 @@ import { PrismaOrderRepository } from './infrastructure/database/PrismaOrderRepo
 import { PrismaMenuItemRepository } from './infrastructure/database/PrismaMenuItemRepository';
 import { PrismaOrderItemRepository } from './infrastructure/database/PrismaOrderItemRepository';
 import { CreateOrder } from './domain/usecases/CreateOrder';
-// import { CreateMenuItem } from './domain/usecases/CreateMenuItem'; // Não usado diretamente, usado via handler
+import { CreateMenuItem } from './domain/usecases/CreateMenuItem';
 import { UpdateMenuItem } from './domain/usecases/UpdateMenuItem';
 import { NotificationService } from './application/services/NotificationService';
 import { OrderStateServiceFactory } from './infrastructure/cache/OrderStateServiceFactory';
@@ -67,6 +67,7 @@ async function main() {
       idempotencyService
     );
     const updateMenuItem = new UpdateMenuItem(menuItemRepository);
+    const createMenuItem = new CreateMenuItem(menuItemRepository, restaurantRepository);
 
     // Handlers
     const restaurantOnboardingHandler = new RestaurantOnboardingHandler(
@@ -80,7 +81,8 @@ async function main() {
       orderRepository,
       menuItemRepository,
       notificationService,
-      updateMenuItem
+      updateMenuItem,
+      createMenuItem
     );
     const customerOrdersHandler = new CustomerOrdersHandler(
       evolutionApi,

@@ -6,6 +6,7 @@ import { IMenuItemRepository } from '../../domain/repositories/IMenuItemReposito
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { NotificationService } from '../services/NotificationService';
 import { UpdateMenuItem } from '../../domain/usecases/UpdateMenuItem';
+import { CreateMenuItem } from '../../domain/usecases/CreateMenuItem';
 import { MessageFormatter } from '../services/MessageFormatter';
 import { logger } from '../../shared/utils/logger';
 
@@ -15,7 +16,8 @@ export class RestaurantManagementHandler {
     private readonly orderRepository: IOrderRepository,
     private readonly menuItemRepository: IMenuItemRepository,
     private readonly notificationService: NotificationService,
-    private readonly updateMenuItem: UpdateMenuItem
+    private readonly updateMenuItem: UpdateMenuItem,
+    private readonly createMenuItem: CreateMenuItem
   ) {}
 
   async handle(intent: Intent, data: MessageData): Promise<void> {
@@ -36,14 +38,17 @@ export class RestaurantManagementHandler {
         case Intent.BLOQUEAR_ITEM_CARDAPIO:
           await this.handleBlockItem(data);
           break;
-        case Intent.DESBLOQUEAR_ITEM_CARDAPIO:
-          await this.handleUnblockItem(data);
-          break;
-        default:
-          await this.evolutionApi.sendMessage({
-            to: data.from,
-            text: 'Comando não reconhecido. Digite "ajuda" para ver os comandos disponíveis.',
-          });
+      case Intent.DESBLOQUEAR_ITEM_CARDAPIO:
+        await this.handleUnblockItem(data);
+        break;
+      case Intent.CADASTRAR_ITEM_CARDAPIO:
+        await this.handleCreateMenuItem(data);
+        break;
+      default:
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: 'Comando não reconhecido. Digite "ajuda" para ver os comandos disponíveis.',
+        });
       }
     } catch (error: any) {
       logger.error('Error in RestaurantManagementHandler', {
@@ -344,6 +349,117 @@ export class RestaurantManagementHandler {
       await this.evolutionApi.sendMessage({
         to: data.from,
         text: '❌ Erro ao desbloquear item.',
+      });
+    }
+  }
+
+  private async handleCreateMenuItem(data: MessageData): Promise<void> {
+    if (!data.restaurantId) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro: Restaurante não identificado. Por favor, complete o cadastro do restaurante primeiro.',
+      });
+      return;
+    }
+
+    try {
+      const text = data.text.trim();
+      
+      // Tenta extrair nome e preço da mensagem usando regex
+      // Formatos aceitos:
+      // - "Nome do Item - R$ 35,00"
+      // - "Nome do Item - R$35,00"
+      // - "Nome do Item - 35,00"
+      // - "Nome do Item - R$ 35"
+      // - "Nome do Item - 35"
+      const priceMatch = text.match(/(?:R\$\s*)?(\d+(?:[.,]\d{2})?)/);
+      const priceStr = priceMatch ? priceMatch[1].replace(',', '.') : null;
+      const price = priceStr ? parseFloat(priceStr) : null;
+
+      // Se não encontrar preço, pede informações
+      if (!price || isNaN(price) || price <= 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: `📝 **Cadastrar Item no Cardápio**
+
+Por favor, informe o item no seguinte formato:
+**Nome do Item - R$ Preço**
+
+Exemplos:
+• Pizza Portuguesa - R$ 35,00
+• Coca-Cola - R$ 5,50
+• Hambúrguer Artesanal - R$ 28,90
+
+Digite o nome e preço do item que deseja cadastrar:`,
+        });
+        return;
+      }
+
+      // Extrai nome (tudo antes do preço, removendo traços e espaços extras)
+      const nameMatch = text.match(/(.+?)(?:\s*-\s*(?:R\$\s*)?\d)/);
+      let name = nameMatch 
+        ? nameMatch[1].trim().replace(/\s*-\s*$/, '').trim()
+        : text.replace(/(?:R\$\s*)?\d+(?:[.,]\d{2})?.*/, '').trim();
+
+      // Se não conseguiu extrair nome, pede novamente
+      if (!name || name.length < 3) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Não consegui identificar o nome do item. Por favor, digite novamente no formato:\n**Nome do Item - R$ Preço**\n\nExemplo: Pizza Portuguesa - R$ 35,00',
+        });
+        return;
+      }
+
+      // Valida preço máximo
+      if (price > 9999.99) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Preço muito alto. O valor máximo é R$ 9.999,99. Por favor, digite um preço válido.',
+        });
+        return;
+      }
+
+      // Cria o item
+      const menuItem = await this.createMenuItem.execute({
+        restaurantId: data.restaurantId,
+        name,
+        price,
+        isAvailable: true,
+      });
+
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `✅ **Item cadastrado com sucesso!**
+
+📋 **${menuItem.getName()}** - ${menuItem.getPrice().getFormatted()}
+
+Deseja cadastrar outro item? Digite "cadastrar cardápio" novamente ou digite outro item no formato:
+**Nome - R$ Preço**`,
+      });
+
+      logger.info('Menu item created successfully', {
+        menuItemId: menuItem.getId(),
+        restaurantId: data.restaurantId,
+        name: menuItem.getName(),
+        price: menuItem.getPrice().getValue(),
+      });
+    } catch (error: any) {
+      logger.error('Error creating menu item', { error: error.message, restaurantId: data.restaurantId });
+      
+      let errorMessage = '❌ Erro ao cadastrar item.';
+      const errorMsg = error.message || '';
+      
+      if (errorMsg.includes('Restaurant not found')) {
+        errorMessage = '❌ Restaurante não encontrado. Por favor, complete o cadastro do restaurante primeiro.';
+      } else if (errorMsg.includes('Name must have')) {
+        errorMessage = '❌ Nome do item muito curto. O nome deve ter pelo menos 3 caracteres.';
+      } else if (errorMsg.includes('Price must be')) {
+        errorMessage = '❌ Preço inválido. O preço deve ser maior que zero.';
+      }
+
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: errorMessage,
       });
     }
   }
