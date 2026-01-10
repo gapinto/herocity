@@ -74,9 +74,14 @@ Essas são para funcionalidades futuras (pagamentos, Redis, etc.):
 # ASAAS_API_KEY=
 # STRIPE_SECRET_KEY=
 
-# Redis - Deixe vazio por enquanto (usa memória)
-# REDIS_URL=
-# ORDER_STATE_STORAGE=memory
+# Redis - Para produção, use Redis (desenvolvimento pode usar memory)
+# REDIS_URL=redis://localhost:6379
+# REDIS_PASSWORD=senha-do-redis (opcional)
+# ORDER_STATE_STORAGE=memory  # ou 'redis' para produção
+# CONVERSATION_STORAGE=memory  # ou 'redis' para produção (conversas ativas)
+# ONBOARDING_STORAGE=memory    # ou 'redis' para produção (estado de onboarding)
+# ACTIVE_CONVERSATION_TTL=1800  # TTL em segundos para conversas ativas (padrão: 30min)
+# ONBOARDING_STATE_TTL=86400    # TTL em segundos para estado de onboarding (padrão: 24h)
 
 # WhatsApp Number - Deixe vazio por enquanto
 # WHATSAPP_NUMBER=
