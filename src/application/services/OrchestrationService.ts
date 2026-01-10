@@ -200,6 +200,21 @@ export class OrchestrationService {
         from,
       });
 
+      // IMPORTANTE: Se intenção for RESTAURANT_ONBOARDING mas usuário já é RESTAURANT_USER,
+      // não deve iniciar onboarding (já está cadastrado)
+      if (intentResult.intent === Intent.RESTAURANT_ONBOARDING && userContextResult.type === UserContext.RESTAURANT) {
+        await this.evolutionApi.sendMessage({
+          to: from,
+          text: `✅ Você já está cadastrado como restaurante!\n\nPara gerenciar seu cardápio, use:\n• "cadastrar cardápio" - Adicionar itens\n• "ver cardápio" - Ver itens cadastrados\n• "bloquear item" - Marcar item como indisponível\n• "desbloquear item" - Marcar item como disponível\n• "pedidos pendentes" - Ver pedidos aguardando preparo`,
+        });
+        // Idempotência: marca mensagem como processada
+        if (messageId && this.idempotencyService) {
+          const idempotencyKey = `message:${messageId}`;
+          await this.idempotencyService.markAsProcessed(idempotencyKey, 86400);
+        }
+        return;
+      }
+
       // Prepara dados da mensagem (usando texto limpo, sem "hero")
       const messageData: MessageData = {
         from,

@@ -130,11 +130,17 @@ FORMATO DE RESPOSTA (JSON):
 
       systemPrompt += `\n\nUse temperature 0.0 para precisão.`;
 
+      // Adiciona contexto sobre o usuário ao prompt
+      let userContextPrompt = `Contexto do usuário: ${userContext}`;
+      if (userContext === UserContext.RESTAURANT) {
+        userContextPrompt += '\n\n⚠️ IMPORTANTE: Este usuário JÁ É RESTAURANTE cadastrado. NÃO identifique como "restaurant_onboarding" mesmo que peça para cadastrar. Use intenções de gerenciamento como "cadastrar_item_cardapio" se pedir para cadastrar cardápio.';
+      }
+
       const response = await this.client.post('/chat/completions', {
         model: 'deepseek-chat',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Contexto: ${userContext}\nMensagem: ${text}` },
+          { role: 'user', content: `${userContextPrompt}\nMensagem: ${text}` },
         ],
         temperature: 0.0,
         stream: false,
