@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Restaurant {
+  id               String   @id @default(cuid())
+  name             String   // Nome fantasia (exibição)
+  phone            String   @unique
+  address          String?
+  isActive         Boolean  @default(true)
+  menuRules        Json?
+  
+  // Dados para criação de subconta no provedor de pagamento
+  legalName        String?  // Razão social / Nome completo (PF)
+  cpfCnpj          String?  // CPF (PF) ou CNPJ (PJ)
+  email            String?  // E-mail para conta
+  bankAccount      Json?    // Dados bancários: { bankCode, agency, account, accountType, accountHolderName }
+  documentUrl      String?  // URL do documento do responsável (upload)
+  
+  // ID da subconta criada no provedor de pagamento (Asaas/Stripe)
+  paymentAccountId String?  @unique // ID da subconta (ex: "acct_29384")
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users      RestaurantUser[]
+  menuItems  MenuItem[]
+  orders     Order[]
+
+  @@map("restaurants")
+}
+
+model RestaurantUser {
+  id           String     @id @default(cuid())
+  restaurantId String
+  phone        String
+  name         String
+  role         String     @default("manager")
+  createdAt    DateTime   @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, phone])
+  @@map("restaurant_users")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("customers")
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  description  String?
+  price        Decimal  @db.Decimal(10, 2)
+  isAvailable  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant  Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@map("menu_items")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  restaurantId    String
+  customerId      String
+  status          String      @default("draft")
+  total           Decimal     @db.Decimal(10, 2)
+  paymentMethod   String?
+  paymentLink     String?
+  paymentId       String?     @unique
+  platformFee     Decimal?    @db.Decimal(10, 2)
+  restaurantAmount Decimal?   @db.Decimal(10, 2)
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  price      Decimal  @db.Decimal(10, 2)
+  modifiers  String?  // JSON string com modificadores (sem cebola, etc)
+  createdAt  DateTime @default(now())
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@map("order_items")
+}
