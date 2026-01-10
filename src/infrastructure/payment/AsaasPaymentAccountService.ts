@@ -69,7 +69,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Agora cria conta bancária para o cliente (com CPF/CNPJ do titular)
       if (input.bankAccount) {
@@ -78,7 +78,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
 
       return {
         accountId: data.id,
-        status: 'pending', // Asaas geralmente aprova automaticamente, mas pode exigir verificação
+        status: 'pending' as const, // Asaas geralmente aprova automaticamente, mas pode exigir verificação
         requiresAdditionalInfo: !data.postalCode || !data.address, // Se faltar endereço, precisa completar
       };
     } catch (error: any) {
@@ -99,11 +99,11 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         throw new Error('Account not found');
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Asaas não retorna status explícito de aprovação
       // Assumimos que se existe e não tem erros, está aprovado
-      if (data.errors && data.errors.length > 0) {
+      if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
         return 'rejected';
       }
 
@@ -145,7 +145,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
       if (!response.ok) {
         let errorMessage = 'Failed to update bank account';
         try {
-          const errorData = await response.json();
+          const errorData = await response.json() as any;
           errorMessage = errorData.errors?.[0]?.description || errorData.message || errorMessage;
         } catch (parseError) {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;

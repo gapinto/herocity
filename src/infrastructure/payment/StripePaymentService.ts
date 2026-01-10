@@ -4,11 +4,11 @@ import { logger } from '../../shared/utils/logger';
 
 export class StripePaymentService implements IPaymentService {
   private readonly apiKey: string;
-  private readonly platformAccountId: string;
 
   constructor(private readonly idempotencyService?: IIdempotencyService) {
     this.apiKey = process.env.STRIPE_SECRET_KEY || '';
-    this.platformAccountId = process.env.STRIPE_PLATFORM_ACCOUNT_ID || '';
+    // platformAccountId será usado no futuro para split payments (application_fee)
+    // const platformAccountId = process.env.STRIPE_PLATFORM_ACCOUNT_ID || '';
 
     if (!this.apiKey) {
       logger.warn('StripePaymentService: STRIPE_SECRET_KEY not configured');
@@ -74,17 +74,17 @@ export class StripePaymentService implements IPaymentService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.message || 'Failed to create Stripe payment');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     return {
       paymentId: data.id,
       paymentLink: data.url,
       expiresAt: undefined,
-      status: 'pending',
+      status: 'pending' as const,
     };
   }
 
@@ -99,7 +99,7 @@ export class StripePaymentService implements IPaymentService {
       throw new Error('Payment not found');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.payment_status === 'paid' ? 'paid' : 'pending';
   }
 
@@ -125,7 +125,7 @@ export class StripePaymentService implements IPaymentService {
       throw new Error('Payment not found');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     if (data.status !== 'succeeded') {
       throw new Error(`Payment not confirmed. Status: ${data.status}`);
@@ -133,7 +133,7 @@ export class StripePaymentService implements IPaymentService {
 
     const confirmation: PaymentConfirmation = {
       paymentId: data.id,
-      status: 'paid',
+      status: 'paid' as const,
       paidAt: new Date(data.created * 1000),
       amount: data.amount,
       platformFee: data.application_fee_amount,

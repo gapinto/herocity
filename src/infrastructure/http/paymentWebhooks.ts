@@ -103,7 +103,7 @@ export function createPaymentWebhookRoutes(
           await idempotencyService.markAsProcessed(idempotencyKey, 86400);
         }
         if (idempotencyService) {
-          await idempotencyService.markAsProcessedWithResult(paymentIdempotencyKey, confirmation, 86400);
+          await idempotencyService.markAsProcessed(paymentIdempotencyKey, 86400, confirmation);
         }
 
         logger.info('Payment confirmed and order updated', {
@@ -111,17 +111,18 @@ export function createPaymentWebhookRoutes(
           paymentId,
           amount: confirmation.amount,
         });
+        
+        return res.status(200).json({ received: true });
       } else {
         // Marca eventos não processados como vistos (evita reprocessar)
         if (idempotencyKey && idempotencyService) {
           await idempotencyService.markAsProcessed(idempotencyKey, 3600); // 1 hora para eventos não relevantes
         }
+        return res.status(200).json({ received: true });
       }
-
-      res.status(200).json({ received: true });
     } catch (error: any) {
       logger.error('Error processing Asaas webhook', { error: error.message, body: req.body });
-      res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -215,7 +216,7 @@ export function createPaymentWebhookRoutes(
           await idempotencyService.markAsProcessed(idempotencyKey, 86400);
         }
         if (idempotencyService) {
-          await idempotencyService.markAsProcessedWithResult(paymentIdempotencyKey, confirmation, 86400);
+          await idempotencyService.markAsProcessed(paymentIdempotencyKey, 86400, confirmation);
         }
 
         logger.info('Payment confirmed and order updated', {
@@ -223,17 +224,18 @@ export function createPaymentWebhookRoutes(
           paymentId,
           amount: confirmation.amount,
         });
+        
+        return res.status(200).json({ received: true });
       } else {
         // Marca eventos não processados como vistos
         if (idempotencyKey && idempotencyService) {
           await idempotencyService.markAsProcessed(idempotencyKey, 3600);
         }
+        return res.status(200).json({ received: true });
       }
-
-      res.status(200).json({ received: true });
     } catch (error: any) {
       logger.error('Error processing Stripe webhook', { error: error.message, body: req.body });
-      res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error' });
     }
   });
 

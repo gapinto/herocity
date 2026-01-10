@@ -86,11 +86,11 @@ export class AsaasPaymentService implements IPaymentService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.message || 'Failed to create Pix payment');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     let qrCode: string | undefined;
     try {
@@ -101,7 +101,7 @@ export class AsaasPaymentService implements IPaymentService {
       });
 
       if (qrCodeResponse.ok) {
-        const qrData = await qrCodeResponse.json();
+        const qrData = await qrCodeResponse.json() as any;
         qrCode = qrData.encodedImage || qrData.payload;
       }
     } catch (error: any) {
@@ -153,11 +153,11 @@ export class AsaasPaymentService implements IPaymentService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.message || 'Failed to create card payment');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     return {
       paymentId: data.id,
@@ -179,7 +179,7 @@ export class AsaasPaymentService implements IPaymentService {
         throw new Error('Payment not found');
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       return this.mapAsaasStatus(data.status);
     } catch (error: any) {
       logger.error('Error getting Asaas payment status', { error: error.message, paymentId });
@@ -209,7 +209,7 @@ export class AsaasPaymentService implements IPaymentService {
       throw new Error('Payment not found');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     if (data.status !== 'CONFIRMED' && data.status !== 'RECEIVED') {
       throw new Error(`Payment not confirmed. Status: ${data.status}`);
@@ -219,8 +219,8 @@ export class AsaasPaymentService implements IPaymentService {
     let restaurantAmount: number | undefined;
 
     if (data.split) {
-      const platformSplit = data.split.find((s: any) => s.walletId === this.platformWalletId);
-      const restaurantSplit = data.split.find((s: any) => s.walletId !== this.platformWalletId);
+      const platformSplit = (data.split as any[]).find((s: any) => s.walletId === this.platformWalletId);
+      const restaurantSplit = (data.split as any[]).find((s: any) => s.walletId !== this.platformWalletId);
 
       platformFee = platformSplit ? platformSplit.value * 100 : undefined;
       restaurantAmount = restaurantSplit ? restaurantSplit.value * 100 : undefined;

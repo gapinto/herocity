@@ -84,7 +84,7 @@ export function createRoutes(
       const whatsappNumber = process.env.WHATSAPP_NUMBER || '5511999999999';
       const whatsappLink = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(qrCodeText)}`;
 
-      res.json({
+      return res.json({
         restaurantId,
         restaurantName: restaurant.getName(),
         qrCodeText,
@@ -92,7 +92,7 @@ export function createRoutes(
         instructions: 'Escaneie este QR code com seu WhatsApp para fazer um pedido diretamente!',
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: error.message });
     }
   });
 
