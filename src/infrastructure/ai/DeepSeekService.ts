@@ -70,7 +70,11 @@ INTENÇÕES DO RESTAURANTE:
 - notificar_cliente: enviar mensagens de status manualmente
 - bloquear_item_cardapio: desabilitar item temporariamente
 - desbloquear_item_cardapio: habilitar item novamente
-- restaurant_onboarding: cadastrar novo restaurante
+- restaurant_onboarding: cadastrar novo restaurante (quando usuário digita "1", "opção 1", "cadastrar restaurante", "quero cadastrar meu restaurante", etc.)
+
+IMPORTANTE:
+- Se o usuário for NEW_USER e digitar apenas "1" ou "opção 1", identifique como "restaurant_onboarding"
+- Se o usuário for NEW_USER e digitar "2" ou "opção 2" ou "fazer pedido", identifique como "criar_pedido"
 
 FORMATO DE RESPOSTA (JSON):
 {

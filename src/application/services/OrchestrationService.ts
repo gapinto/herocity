@@ -9,6 +9,7 @@ import { RestaurantOnboardingHandler } from '../handlers/RestaurantOnboardingHan
 import { RestaurantManagementHandler } from '../handlers/RestaurantManagementHandler';
 import { CustomerOrdersHandler } from '../handlers/CustomerOrdersHandler';
 import { IIdempotencyService } from '../../domain/services/IIdempotencyService';
+import { ActiveConversationService } from './ActiveConversationService';
 import { metricsService } from './MetricsService';
 import { structuredLogger } from '../../shared/utils/structuredLogger';
 import { logger } from '../../shared/utils/logger';
@@ -56,6 +57,8 @@ export interface MessageData {
 }
 
 export class OrchestrationService {
+  private readonly activeConversationService: ActiveConversationService;
+
   constructor(
     private readonly userContextService: UserContextService,
     private readonly intentService: IntentService,
@@ -64,7 +67,9 @@ export class OrchestrationService {
     private readonly restaurantManagementHandler: RestaurantManagementHandler,
     private readonly customerOrdersHandler: CustomerOrdersHandler,
     private readonly idempotencyService?: IIdempotencyService
-  ) {}
+  ) {
+    this.activeConversationService = new ActiveConversationService();
+  }
 
   async handleWebhook(webhook: EvolutionWebhook): Promise<void> {
     try {
@@ -75,6 +80,24 @@ export class OrchestrationService {
       }
 
       const { from, text, pushName, mediaUrl, messageId } = parsed;
+
+      // FILTRO: Responde apenas mensagens que contenham "hero" OU se já tiver conversa ativa
+      // Isso permite iniciar o fluxo com "hero" mas continuar sem precisar repetir
+      const hasHero = text.toLowerCase().includes('hero');
+      const hasActiveConversation = this.activeConversationService.hasActiveConversation(from);
+
+      if (!hasHero && !hasActiveConversation) {
+        logger.info('Message filtered out (does not contain "hero" and no active conversation)', { 
+          from, 
+          text: text.substring(0, 50) 
+        });
+        return;
+      }
+
+      // Se contém "hero", marca conversa como ativa
+      if (hasHero) {
+        this.activeConversationService.markAsActive(from);
+      }
 
       // Idempotência: verifica se mensagem já foi processada
       // Nota: Esta verificação é opcional, pois o WhatsApp geralmente garante delivery único
@@ -104,21 +127,42 @@ export class OrchestrationService {
       const userContextResult = await this.userContextService.identify(phone);
       metricsService.endTimer('user_context_identification');
 
-      // Se for novo usuário, envia mensagem de boas-vindas
-      if (userContextResult.type === UserContext.NEW_USER) {
-        await this.sendWelcomeMessage(from, pushName);
-        return;
+      // Validação: garante que userContextResult não seja undefined
+      if (!userContextResult) {
+        logger.error('UserContextService.identify returned undefined', { from });
+        throw new Error('Failed to identify user context');
       }
 
-      // Identifica intenção COM restaurantId se tiver (para buscar cardápio)
+      // Remove "hero" do texto para processar apenas a parte relevante
+      // Isso permite filtrar mensagens mas não interfere na identificação de intenção
+      // Se o texto ficar vazio após remover "hero", usa o texto original
+      let cleanedText = text.replace(/hero/gi, '').trim();
+      if (!cleanedText) {
+        cleanedText = text; // Se só tinha "hero", mantém o texto original
+      }
+
+      // Identifica intenção PRIMEIRO (antes de decidir se envia boas-vindas)
+      // Isso permite processar opções como "1" mesmo sendo NEW_USER
       metricsService.startTimer('intent_identification');
       const intentResult = await this.intentService.identify(
-        text,
+        cleanedText,
         userContextResult.type,
         restaurantIdFromQR || userContextResult.restaurantId
       );
       metricsService.endTimer('intent_identification');
       metricsService.recordIntentIdentified(intentResult.intent);
+
+      // Se for novo usuário e não houver intenção clara, envia mensagem de boas-vindas
+      // Mas se identificar intenção (ex: "1" = RESTAURANT_ONBOARDING), processa diretamente
+      if (userContextResult.type === UserContext.NEW_USER && intentResult.intent === Intent.SOLICITAR_AJUDA) {
+        await this.sendWelcomeMessage(from, pushName);
+        // Idempotência: marca mensagem como processada
+        if (messageId && this.idempotencyService) {
+          const idempotencyKey = `message:${messageId}`;
+          await this.idempotencyService.markAsProcessed(idempotencyKey, 86400);
+        }
+        return;
+      }
 
       // Log estruturado
       structuredLogger.info('Intent identified', {
@@ -128,10 +172,10 @@ export class OrchestrationService {
         from,
       });
 
-      // Prepara dados da mensagem
+      // Prepara dados da mensagem (usando texto limpo, sem "hero")
       const messageData: MessageData = {
         from,
-        text,
+        text: cleanedText,
         pushName,
         mediaUrl,
         userContext: userContextResult.type,
