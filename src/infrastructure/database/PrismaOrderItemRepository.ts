@@ -52,11 +52,15 @@ export class PrismaOrderItemRepository implements IOrderItemRepository {
       modifiers: orderItem.getModifiers(),
     };
 
-    const saved = await this.prisma.orderItem.upsert({
-      where: { id: orderItem.getId() || undefined },
-      create: data,
-      update: data,
-    });
+    const id = orderItem.getId().trim();
+    const saved = id
+      ? await this.prisma.orderItem.update({
+          where: { id },
+          data,
+        })
+      : await this.prisma.orderItem.create({
+          data,
+        });
 
     return OrderItem.fromPersistence({
       id: saved.id,
