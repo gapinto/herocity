@@ -62,11 +62,17 @@ export class PrismaCustomerRepository implements ICustomerRepository {
       address: customer.getAddress(),
     };
 
-    const saved = await this.prisma.customer.upsert({
-      where: { id: customer.getId() || undefined },
-      create: data,
-      update: data,
-    });
+    const id = customer.getId().trim();
+    const saved = id
+      ? await this.prisma.customer.update({
+          where: { id },
+          data,
+        })
+      : await this.prisma.customer.upsert({
+          where: { phone: data.phone },
+          create: data,
+          update: data,
+        });
 
     return Customer.fromPersistence({
       id: saved.id,
