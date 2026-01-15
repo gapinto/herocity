@@ -77,11 +77,15 @@ export class PrismaMenuItemRepository implements IMenuItemRepository {
       isAvailable: menuItem.isAvailable(),
     };
 
-    const saved = await this.prisma.menuItem.upsert({
-      where: { id: menuItem.getId() || undefined },
-      create: data,
-      update: data,
-    });
+    const id = menuItem.getId().trim();
+    const saved = id
+      ? await this.prisma.menuItem.update({
+          where: { id },
+          data,
+        })
+      : await this.prisma.menuItem.create({
+          data,
+        });
 
     return MenuItem.fromPersistence({
       id: saved.id,
