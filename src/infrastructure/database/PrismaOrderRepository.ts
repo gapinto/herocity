@@ -177,11 +177,15 @@ export class PrismaOrderRepository implements IOrderRepository {
       paidAt: order.getPaidAt() || null,
     };
 
-    const saved = await this.prisma.order.upsert({
-      where: { id: order.getId() || undefined },
-      create: data,
-      update: data,
-    });
+    const id = order.getId().trim();
+    const saved = id
+      ? await this.prisma.order.update({
+          where: { id },
+          data,
+        })
+      : await this.prisma.order.create({
+          data,
+        });
 
     return Order.fromPersistence({
       id: saved.id,
