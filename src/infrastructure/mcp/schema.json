@@ -1,0 +1,51 @@
+﻿{
+  "name": "herocity-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for HeroCity restaurant operations",
+  "transport": "http-json",
+  "tools": [
+    {"name": "health_check", "description": "Health check", "input": {"type": "object", "properties": {}}, "output": {"type": "object"}},
+    {"name": "get_metrics", "description": "Get metrics", "input": {"type": "object", "properties": {}}, "output": {"type": "object"}},
+
+    {"name": "get_restaurant", "description": "Get restaurant by id", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "find_restaurant_by_phone", "description": "Find restaurant by phone", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "create_restaurant", "description": "Create restaurant", "input": {"type": "object", "required": ["name", "phone"], "properties": {"name": {"type": "string"}, "phone": {"type": "string"}, "address": {"type": "string"}, "legal_name": {"type": "string"}, "cpf_cnpj": {"type": "string"}, "email": {"type": "string"}, "bank_account": {"type": "object"}, "document_url": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "update_restaurant_payment_data", "description": "Update restaurant payment data", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}, "legal_name": {"type": "string"}, "cpf_cnpj": {"type": "string"}, "email": {"type": "string"}, "bank_account": {"type": "object"}, "document_url": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "create_payment_account", "description": "Create payment sub-account for restaurant", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "get_qr_code", "description": "Get QR code payload for restaurant", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "get_customer", "description": "Get customer by id", "input": {"type": "object", "required": ["customer_id"], "properties": {"customer_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "find_customer_by_phone", "description": "Find customer by phone", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "get_menu", "description": "Get available menu items for a restaurant", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "list_menu_items", "description": "List menu items (optionally include unavailable)", "input": {"type": "object", "required": ["restaurant_id"], "properties": {"restaurant_id": {"type": "string"}, "include_unavailable": {"type": "boolean"}}}, "output": {"type": "object"}},
+    {"name": "create_menu_item", "description": "Create a menu item", "input": {"type": "object", "required": ["restaurant_id", "name", "price"], "properties": {"restaurant_id": {"type": "string"}, "name": {"type": "string"}, "price": {"type": "number"}, "description": {"type": "string"}, "is_available": {"type": "boolean"}}}, "output": {"type": "object"}},
+    {"name": "update_menu_item", "description": "Update a menu item", "input": {"type": "object", "required": ["item_id"], "properties": {"item_id": {"type": "string"}, "name": {"type": "string"}, "price": {"type": "number"}, "description": {"type": "string"}, "is_available": {"type": "boolean"}}}, "output": {"type": "object"}},
+    {"name": "block_menu_item", "description": "Block menu item", "input": {"type": "object", "required": ["item_id"], "properties": {"item_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "unblock_menu_item", "description": "Unblock menu item", "input": {"type": "object", "required": ["item_id"], "properties": {"item_id": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "create_order", "description": "Create a new order", "input": {"type": "object", "required": ["restaurant_id", "customer_phone"], "properties": {"restaurant_id": {"type": "string"}, "customer_phone": {"type": "string"}, "idempotency_key": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "add_item", "description": "Add item to order", "input": {"type": "object", "required": ["order_id", "item_id", "quantity"], "properties": {"order_id": {"type": "string"}, "item_id": {"type": "string"}, "quantity": {"type": "integer"}}}, "output": {"type": "object"}},
+    {"name": "remove_item", "description": "Remove item from order", "input": {"type": "object", "required": ["order_id", "item_id"], "properties": {"order_id": {"type": "string"}, "item_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "change_item", "description": "Change item in order", "input": {"type": "object", "required": ["order_id", "item_id", "new_item_id"], "properties": {"order_id": {"type": "string"}, "item_id": {"type": "string"}, "new_item_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "get_order", "description": "Get order details", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "get_order_status", "description": "Get order status", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "list_orders_by_status", "description": "List orders by status", "input": {"type": "object", "required": ["restaurant_id", "status"], "properties": {"restaurant_id": {"type": "string"}, "status": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "cancel_order", "description": "Cancel order", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "request_payment", "description": "Request payment for order", "input": {"type": "object", "required": ["order_id", "method"], "properties": {"order_id": {"type": "string"}, "method": {"type": "string", "enum": ["pix", "card"]}}}, "output": {"type": "object"}},
+    {"name": "confirm_payment", "description": "Confirm payment for order", "input": {"type": "object", "required": ["order_id", "payment_id"], "properties": {"order_id": {"type": "string"}, "payment_id": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "notify_kitchen", "description": "Notify kitchen of paid order", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "mark_order_preparing", "description": "Mark order as preparing", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "mark_order_ready", "description": "Mark order as ready", "input": {"type": "object", "required": ["order_id"], "properties": {"order_id": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "notify_customer", "description": "Notify customer with a message", "input": {"type": "object", "required": ["order_id", "message"], "properties": {"order_id": {"type": "string"}, "message": {"type": "string"}}}, "output": {"type": "object"}},
+
+    {"name": "get_active_conversation", "description": "Check if conversation is active", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "set_active_conversation", "description": "Mark conversation active", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}, "ttl": {"type": "integer"}}}, "output": {"type": "object"}},
+    {"name": "clear_active_conversation", "description": "Clear active conversation", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "get_onboarding_state", "description": "Get onboarding state", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}},
+    {"name": "set_onboarding_state", "description": "Set onboarding state", "input": {"type": "object", "required": ["phone", "state"], "properties": {"phone": {"type": "string"}, "state": {"type": "string"}, "data": {"type": "object"}}}, "output": {"type": "object"}},
+    {"name": "clear_onboarding_state", "description": "Clear onboarding state", "input": {"type": "object", "required": ["phone"], "properties": {"phone": {"type": "string"}}}, "output": {"type": "object"}}
+  ]
+}

@@ -8,6 +8,8 @@ import { IPaymentService } from '../../domain/services/IPaymentService';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IIdempotencyService } from '../../domain/services/IIdempotencyService';
 import { NotificationService } from '../../application/services/NotificationService';
+import { createMcpRoutes } from '../mcp/routes';
+import { McpDependencies } from '../mcp/handlers';
 import { env } from '../../shared/utils/env';
 import { logger } from '../../shared/utils/logger';
 
@@ -16,6 +18,7 @@ interface ServerDependencies {
   orderRepository?: IOrderRepository;
   notificationService?: NotificationService;
   idempotencyService?: IIdempotencyService;
+  mcpDependencies?: McpDependencies;
 }
 
 export function createServer(
@@ -33,6 +36,11 @@ export function createServer(
 
   const routes = createRoutes(whatsAppController, restaurantRepository);
   app.use('/api', routes);
+
+  if (dependencies?.mcpDependencies) {
+    const mcpRoutes = createMcpRoutes(dependencies.mcpDependencies);
+    app.use('/api', mcpRoutes);
+  }
 
   // Payment webhook routes
   if (dependencies?.paymentService && dependencies?.orderRepository && dependencies?.notificationService) {

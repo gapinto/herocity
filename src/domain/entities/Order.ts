@@ -84,6 +84,15 @@ export class Order {
     return this.total;
   }
 
+  updateTotal(total: Price): void {
+    // Idempotência: se o total já é o mesmo, não altera
+    if (this.total.getValue() === total.getValue()) {
+      return;
+    }
+    this.total = total;
+    this.updatedAt = new Date();
+  }
+
   updateStatus(newStatus: OrderStatus): void {
     // Idempotência: se já está no status desejado, não faz nada
     if (this.status === newStatus) {

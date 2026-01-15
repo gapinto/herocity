@@ -116,6 +116,22 @@ async function main() {
       orderRepository,
       notificationService,
       idempotencyService,
+      mcpDependencies: {
+        restaurantRepository,
+        menuItemRepository,
+        orderRepository,
+        orderItemRepository,
+        customerRepository,
+        paymentService,
+        paymentAccountService,
+        idempotencyService,
+        notificationService,
+        activeConversationService,
+        conversationStateService,
+        createMenuItem,
+        updateMenuItem,
+        createOrder,
+      },
     });
     startServer(app);
 

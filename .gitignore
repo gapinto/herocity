@@ -3,6 +3,7 @@ dist/
 coverage/
 .env
 .env.local
+.env.*
 *.log
 .DS_Store
 .vscode/
@@ -11,3 +12,34 @@ coverage/
 *.swo
 *~
 
+# Prisma
+prisma/migrations/
+# Mas mantém o schema.prisma
+!prisma/schema.prisma
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testes
+coverage/
+.nyc_output/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
