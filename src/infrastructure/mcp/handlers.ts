@@ -1,4 +1,4 @@
-﻿import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
+import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
 import { IMenuItemRepository } from '../../domain/repositories/IMenuItemRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IOrderItemRepository } from '../../domain/repositories/IOrderItemRepository';
