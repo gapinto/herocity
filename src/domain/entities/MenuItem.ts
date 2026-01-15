@@ -2,6 +2,7 @@ import { Price } from '../value-objects/Price';
 
 export interface MenuItemProps {
   id?: string;
+  friendlyId?: number;
   restaurantId: string;
   name: string;
   description?: string;
@@ -13,6 +14,7 @@ export interface MenuItemProps {
 
 export class MenuItem {
   private id: string;
+  private friendlyId?: number;
   private restaurantId: string;
   private name: string;
   private description?: string;
@@ -23,6 +25,7 @@ export class MenuItem {
 
   private constructor(props: MenuItemProps) {
     this.id = props.id || '';
+    this.friendlyId = props.friendlyId;
     this.restaurantId = props.restaurantId;
     this.name = props.name;
     this.description = props.description;
@@ -52,6 +55,10 @@ export class MenuItem {
 
   getId(): string {
     return this.id;
+  }
+
+  getFriendlyId(): number | undefined {
+    return this.friendlyId;
   }
 
   getRestaurantId(): string {

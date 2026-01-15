@@ -43,6 +43,7 @@ export interface McpDependencies {
 function formatMenuItem(item: MenuItem): Record<string, any> {
   return {
     id: item.getId(),
+    friendly_id: item.getFriendlyId() ?? null,
     name: item.getName(),
     description: item.getDescription(),
     price: item.getPrice().getValue(),

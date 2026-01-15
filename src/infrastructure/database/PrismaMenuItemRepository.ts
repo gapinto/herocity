@@ -15,6 +15,7 @@ export class PrismaMenuItemRepository implements IMenuItemRepository {
 
     return MenuItem.fromPersistence({
       id: data.id,
+      friendlyId: data.friendlyId,
       restaurantId: data.restaurantId,
       name: data.name,
       description: data.description || undefined,
@@ -34,6 +35,7 @@ export class PrismaMenuItemRepository implements IMenuItemRepository {
     return data.map((item) =>
       MenuItem.fromPersistence({
         id: item.id,
+        friendlyId: item.friendlyId,
         restaurantId: item.restaurantId,
         name: item.name,
         description: item.description || undefined,
@@ -57,6 +59,7 @@ export class PrismaMenuItemRepository implements IMenuItemRepository {
     return data.map((item) =>
       MenuItem.fromPersistence({
         id: item.id,
+        friendlyId: item.friendlyId,
         restaurantId: item.restaurantId,
         name: item.name,
         description: item.description || undefined,
@@ -83,12 +86,23 @@ export class PrismaMenuItemRepository implements IMenuItemRepository {
           where: { id },
           data,
         })
-      : await this.prisma.menuItem.create({
-          data,
+      : await this.prisma.$transaction(async (tx) => {
+          const maxFriendlyId = await tx.menuItem.aggregate({
+            where: { restaurantId: menuItem.getRestaurantId() },
+            _max: { friendlyId: true },
+          });
+          const nextFriendlyId = (maxFriendlyId._max.friendlyId ?? 0) + 1;
+          return await tx.menuItem.create({
+            data: {
+              ...data,
+              friendlyId: nextFriendlyId,
+            },
+          });
         });
 
     return MenuItem.fromPersistence({
       id: saved.id,
+      friendlyId: saved.friendlyId,
       restaurantId: saved.restaurantId,
       name: saved.name,
       description: saved.description || undefined,

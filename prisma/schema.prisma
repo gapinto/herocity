@@ -69,6 +69,7 @@ model MenuItem {
   name         String
   description  String?
   price        Decimal  @db.Decimal(10, 2)
+  friendlyId   Int
   isAvailable  Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -76,6 +77,7 @@ model MenuItem {
   restaurant  Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]
 
+  @@unique([restaurantId, friendlyId])
   @@map("menu_items")
 }
 
