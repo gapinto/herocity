@@ -460,6 +460,7 @@ export class CustomerOrdersHandler {
     data: MessageData,
     orderData: { restaurantId?: string; items: any[] }
   ): Promise<void> {
+    await this.ensureCustomerId(data);
     if (!data.customerId) {
       await this.evolutionApi.sendMessage({
         to: data.from,
@@ -757,6 +758,7 @@ Digite:
   }
 
   private async handleGetStatus(data: MessageData): Promise<void> {
+    await this.ensureCustomerId(data);
     if (!data.customerId) {
       await this.evolutionApi.sendMessage({
         to: data.from,
@@ -814,6 +816,7 @@ Digite:
   }
 
   private async handleCancelOrder(data: MessageData): Promise<void> {
+    await this.ensureCustomerId(data);
     if (!data.customerId) {
       await this.evolutionApi.sendMessage({
         to: data.from,
