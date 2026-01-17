@@ -1,5 +1,6 @@
 export enum OrderStatus {
   DRAFT = 'draft',
+  NEW = 'new',
   AWAITING_PAYMENT = 'awaiting_payment',
   PAID = 'paid',
   PREPARING = 'preparing',

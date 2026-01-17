@@ -7,6 +7,7 @@ import { Order } from '../entities/Order';
 import { OrderItem } from '../entities/OrderItem';
 import { OrderStatus } from '../enums/OrderStatus';
 import { Price } from '../value-objects/Price';
+import { getLocalDateStart, getTimezoneOrDefault } from '../../shared/utils/timezone';
 
 export interface CreateOrderInput {
   restaurantId: string;
@@ -41,7 +42,10 @@ export class CreateOrder {
         const cachedOrderId = await this.idempotencyService.getResult<string>(idempotencyKey);
         if (cachedOrderId) {
           const existingOrder = await this.orderRepository.findById(cachedOrderId);
-          if (existingOrder && existingOrder.getStatus() === OrderStatus.DRAFT) {
+          if (
+            existingOrder &&
+            (existingOrder.getStatus() === OrderStatus.DRAFT || existingOrder.getStatus() === OrderStatus.NEW)
+          ) {
             return existingOrder;
           }
         }
@@ -49,8 +53,11 @@ export class CreateOrder {
         // Fallback: busca pedido existente em DRAFT ou AWAITING_PAYMENT para o mesmo cliente/restaurante
         const existingOrders = await this.orderRepository.findByCustomerId(input.customerId);
         const draftOrder = existingOrders.find(
-          (o) => o.getRestaurantId() === input.restaurantId && 
-                 (o.getStatus() === OrderStatus.DRAFT || o.getStatus() === OrderStatus.AWAITING_PAYMENT)
+          (o) =>
+            o.getRestaurantId() === input.restaurantId &&
+            (o.getStatus() === OrderStatus.DRAFT ||
+              o.getStatus() === OrderStatus.NEW ||
+              o.getStatus() === OrderStatus.AWAITING_PAYMENT)
         );
         if (draftOrder) {
           // Armazena resultado para próxima vez
@@ -64,6 +71,11 @@ export class CreateOrder {
     const restaurant = await this.restaurantRepository.findById(input.restaurantId);
     if (!restaurant || !restaurant.isActive()) {
       throw new Error('Restaurant not found or inactive');
+    }
+
+    const now = new Date();
+    if (!restaurant.isOpenAt(now)) {
+      throw new Error('Restaurant is closed');
     }
 
     // 2. Validar itens existem e estão disponíveis
@@ -89,11 +101,18 @@ export class CreateOrder {
     }
 
     // 4. Criar Order
+    const status = input.status || OrderStatus.DRAFT;
+    const sequenceDate =
+      status === OrderStatus.NEW
+        ? getLocalDateStart(now, getTimezoneOrDefault(restaurant.getTimezone()))
+        : undefined;
+
     const order = Order.create({
       restaurantId: input.restaurantId,
       customerId: input.customerId,
       total,
-      status: input.status || OrderStatus.DRAFT,
+      status,
+      sequenceDate,
     });
 
     const savedOrder = await this.orderRepository.save(order);

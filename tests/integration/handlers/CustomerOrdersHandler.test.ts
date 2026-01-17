@@ -3,6 +3,8 @@ import { EvolutionApiService } from '../../../src/infrastructure/messaging/Evolu
 import { IOrderRepository } from '../../../src/domain/repositories/IOrderRepository';
 import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemRepository';
 import { IRestaurantRepository } from '../../../src/domain/repositories/IRestaurantRepository';
+import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
+import { IOrderItemRepository } from '../../../src/domain/repositories/IOrderItemRepository';
 import { CreateOrder } from '../../../src/domain/usecases/CreateOrder';
 import { NotificationService } from '../../../src/application/services/NotificationService';
 import { Intent } from '../../../src/domain/enums/Intent';
@@ -20,6 +22,8 @@ describe('CustomerOrdersHandler Integration', () => {
   let orderRepository: jest.Mocked<IOrderRepository>;
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
+  let orderItemRepository: jest.Mocked<IOrderItemRepository>;
+  let customerRepository: jest.Mocked<ICustomerRepository>;
   let createOrder: jest.Mocked<CreateOrder>;
   let notificationService: jest.Mocked<NotificationService>;
   let orderState: jest.Mocked<IOrderStateService>;
@@ -54,6 +58,22 @@ describe('CustomerOrdersHandler Integration', () => {
       findById: jest.fn(),
       findByPhone: jest.fn(),
       findAll: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+    restaurantRepository.findById.mockResolvedValue({ isOpenAt: () => true } as any);
+
+    orderItemRepository = {
+      findByOrderId: jest.fn().mockResolvedValue([]),
+      findById: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      deleteByOrderId: jest.fn(),
+    } as any;
+
+    customerRepository = {
+      findById: jest.fn(),
+      findByPhone: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
     } as any;
@@ -98,6 +118,8 @@ describe('CustomerOrdersHandler Integration', () => {
       orderRepository,
       menuItemRepository,
       restaurantRepository,
+      orderItemRepository,
+      customerRepository,
       createOrder,
       notificationService,
       orderState,
@@ -143,6 +165,7 @@ describe('CustomerOrdersHandler Integration', () => {
         {
           getId: () => 'order-123',
           getStatus: () => 'pending',
+          getDailySequence: () => undefined,
           getTotal: () => ({ getFormatted: () => 'R$ 50,00' }),
         },
       ] as any);

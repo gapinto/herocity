@@ -5,6 +5,11 @@ import { Restaurant } from '../../domain/entities/Restaurant';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 
 export class MessageFormatter {
+  static formatOrderNumber(order: Order): string {
+    const sequence = order.getDailySequence();
+    return sequence ? sequence.toString().padStart(3, '0') : order.getId().slice(0, 8);
+  }
+
   static formatMenu(items: MenuItem[]): string {
     if (items.length === 0) {
       return '📋 Cardápio vazio.\n\nAdicione itens ao cardápio para começar a receber pedidos.';
@@ -35,9 +40,10 @@ export class MessageFormatter {
   }
 
   static formatOrder(order: Order, items: OrderItem[]): string {
-    const orderId = order.getId().slice(0, 8);
+    const orderId = MessageFormatter.formatOrderNumber(order);
     const statusMap: Record<OrderStatus, string> = {
-      [OrderStatus.DRAFT]: '📝 Rascunho',
+      [OrderStatus.DRAFT]: '🛠️ Montando',
+      [OrderStatus.NEW]: '🆕 Novo',
       [OrderStatus.AWAITING_PAYMENT]: '⏳ Aguardando pagamento',
       [OrderStatus.PAID]: '💳 Pago',
       [OrderStatus.PREPARING]: '👨‍🍳 Em preparo',
@@ -62,7 +68,8 @@ export class MessageFormatter {
     }
 
     const statusMap: Record<OrderStatus, string> = {
-      [OrderStatus.DRAFT]: '📝',
+      [OrderStatus.DRAFT]: '🛠️',
+      [OrderStatus.NEW]: '🆕',
       [OrderStatus.AWAITING_PAYMENT]: '⏳',
       [OrderStatus.PAID]: '💳',
       [OrderStatus.PREPARING]: '👨‍🍳',
@@ -74,7 +81,8 @@ export class MessageFormatter {
 
     const ordersList = orders
       .map((order) => {
-        return `${statusMap[order.getStatus()]} Pedido #${order.getId().slice(0, 8)} - ${order.getTotal().getFormatted()}`;
+        const orderId = MessageFormatter.formatOrderNumber(order);
+        return `${statusMap[order.getStatus()]} Pedido #${orderId} - ${order.getTotal().getFormatted()}`;
       })
       .join('\n');
 

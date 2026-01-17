@@ -13,6 +13,8 @@ export interface OrderProps {
   platformFee?: Price;
   restaurantAmount?: Price;
   paidAt?: Date;
+  dailySequence?: number;
+  sequenceDate?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -29,6 +31,8 @@ export class Order {
   private platformFee?: Price;
   private restaurantAmount?: Price;
   private paidAt?: Date;
+  private dailySequence?: number;
+  private sequenceDate?: Date;
   private createdAt: Date;
   private updatedAt: Date;
 
@@ -44,6 +48,8 @@ export class Order {
     this.platformFee = props.platformFee;
     this.restaurantAmount = props.restaurantAmount;
     this.paidAt = props.paidAt;
+    this.dailySequence = props.dailySequence;
+    this.sequenceDate = props.sequenceDate;
     this.createdAt = props.createdAt || new Date();
     this.updatedAt = props.updatedAt || new Date();
   }
@@ -130,8 +136,8 @@ export class Order {
       throw new Error('Cannot update payment info for orders already awaiting payment or paid');
     }
 
-    if (this.status !== OrderStatus.DRAFT) {
-      throw new Error('Can only update payment info for draft orders');
+    if (this.status !== OrderStatus.DRAFT && this.status !== OrderStatus.NEW) {
+      throw new Error('Can only update payment info for new orders');
     }
 
     this.paymentMethod = method;
@@ -177,11 +183,19 @@ export class Order {
   }
 
   canBeModified(): boolean {
-    return this.status === OrderStatus.DRAFT || this.status === OrderStatus.AWAITING_PAYMENT;
+    return (
+      this.status === OrderStatus.DRAFT ||
+      this.status === OrderStatus.NEW ||
+      this.status === OrderStatus.AWAITING_PAYMENT
+    );
   }
 
   canBeCancelled(): boolean {
-    return this.status === OrderStatus.DRAFT || this.status === OrderStatus.AWAITING_PAYMENT;
+    return (
+      this.status === OrderStatus.DRAFT ||
+      this.status === OrderStatus.NEW ||
+      this.status === OrderStatus.AWAITING_PAYMENT
+    );
   }
 
   cancel(): void {
@@ -214,6 +228,25 @@ export class Order {
 
   getPaymentId(): string | undefined {
     return this.paymentId;
+  }
+
+  getDailySequence(): number | undefined {
+    return this.dailySequence;
+  }
+
+  getSequenceDate(): Date | undefined {
+    return this.sequenceDate;
+  }
+
+  setSequenceDate(date: Date): void {
+    this.sequenceDate = date;
+    this.updatedAt = new Date();
+  }
+
+  clearSequence(): void {
+    this.dailySequence = undefined;
+    this.sequenceDate = undefined;
+    this.updatedAt = new Date();
   }
 
   getPlatformFee(): Price | undefined {

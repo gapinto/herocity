@@ -4,6 +4,7 @@ import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepo
 import { Order } from '../../domain/entities/Order';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { logger } from '../../shared/utils/logger';
+import { MessageFormatter } from './MessageFormatter';
 
 export class NotificationService {
   constructor(
@@ -59,7 +60,7 @@ export class NotificationService {
   }
 
   async notifyOrderCreated(order: Order): Promise<void> {
-    const orderId = order.getId().slice(0, 8);
+    const orderId = MessageFormatter.formatOrderNumber(order);
     const total = order.getTotal().getFormatted();
 
     const message = `📦 Novo pedido recebido!
@@ -73,10 +74,11 @@ Use "marcar preparo" para iniciar.`;
   }
 
   async notifyOrderStatusChanged(order: Order, newStatus: OrderStatus): Promise<void> {
-    const orderId = order.getId().slice(0, 8);
+    const orderId = MessageFormatter.formatOrderNumber(order);
 
     const statusMessages: Record<OrderStatus, string> = {
-      [OrderStatus.DRAFT]: `📝 Seu pedido #${orderId} está em rascunho.`,
+      [OrderStatus.DRAFT]: `🛠️ Seu pedido #${orderId} está sendo montado.`,
+      [OrderStatus.NEW]: `🆕 Seu pedido #${orderId} foi criado.`,
       [OrderStatus.AWAITING_PAYMENT]: `⏳ Seu pedido #${orderId} está aguardando pagamento.`,
       [OrderStatus.PAID]: `💳 Seu pedido #${orderId} foi confirmado!`,
       [OrderStatus.PREPARING]: `👨‍🍳 Seu pedido #${orderId} está sendo preparado!\n\nEm breve estará pronto.`,
@@ -92,7 +94,7 @@ Use "marcar preparo" para iniciar.`;
   }
 
   async notifyOrderCancelled(order: Order): Promise<void> {
-    const orderId = order.getId().slice(0, 8);
+    const orderId = MessageFormatter.formatOrderNumber(order);
 
     // Notifica cliente
     await this.notifyOrderStatusChanged(order, OrderStatus.CANCELLED);

@@ -3,6 +3,7 @@ import { EvolutionApiService } from '../../../src/infrastructure/messaging/Evolu
 import { IOrderRepository } from '../../../src/domain/repositories/IOrderRepository';
 import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemRepository';
 import { IOrderItemRepository } from '../../../src/domain/repositories/IOrderItemRepository';
+import { IRestaurantRepository } from '../../../src/domain/repositories/IRestaurantRepository';
 import { NotificationService } from '../../../src/application/services/NotificationService';
 import { UpdateMenuItem } from '../../../src/domain/usecases/UpdateMenuItem';
 import { CreateMenuItem } from '../../../src/domain/usecases/CreateMenuItem';
@@ -20,6 +21,7 @@ describe('RestaurantManagementHandler Integration', () => {
   let orderRepository: jest.Mocked<IOrderRepository>;
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let orderItemRepository: jest.Mocked<IOrderItemRepository>;
+  let restaurantRepository: jest.Mocked<IRestaurantRepository>;
   let notificationService: jest.Mocked<NotificationService>;
   let updateMenuItem: jest.Mocked<UpdateMenuItem>;
   let createMenuItem: jest.Mocked<CreateMenuItem>;
@@ -50,7 +52,15 @@ describe('RestaurantManagementHandler Integration', () => {
     } as any;
 
     orderItemRepository = {
-      findByOrderId: jest.fn(),
+      findByOrderId: jest.fn().mockResolvedValue([{} as any]),
+      save: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
+    restaurantRepository = {
+      findById: jest.fn(),
+      findByPhone: jest.fn(),
+      findAll: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
     } as any;
@@ -76,6 +86,7 @@ describe('RestaurantManagementHandler Integration', () => {
       orderRepository,
       menuItemRepository,
       orderItemRepository,
+      restaurantRepository,
       notificationService,
       updateMenuItem,
       createMenuItem
@@ -92,13 +103,14 @@ describe('RestaurantManagementHandler Integration', () => {
         restaurantId: 'restaurant-123',
       };
 
-      const order = {
-        getId: () => 'order-123',
-        getStatus: () => OrderStatus.PAID,
-        updateStatus: jest.fn(),
-        getCustomerId: () => 'customer-123',
-        getRestaurantId: () => 'restaurant-123',
-      };
+      const order = Order.create({
+        id: 'order-123',
+        restaurantId: 'restaurant-123',
+        customerId: 'customer-123',
+        status: OrderStatus.PAID,
+        total: Price.create(25),
+      });
+      const updateStatusSpy = jest.spyOn(order, 'updateStatus');
 
       orderRepository.findByRestaurantAndStatus = jest.fn().mockResolvedValue([order] as any);
       orderRepository.save = jest.fn().mockResolvedValue(order);
@@ -107,9 +119,37 @@ describe('RestaurantManagementHandler Integration', () => {
       await handler.handle(Intent.MARCAR_PEDIDO_PREPARO, data);
 
       // Then
-      expect(order.updateStatus).toHaveBeenCalledWith(OrderStatus.PREPARING);
+      expect(updateStatusSpy).toHaveBeenCalledWith(OrderStatus.PREPARING);
       expect(orderRepository.save).toHaveBeenCalled();
       expect(notificationService.notifyOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it('should block preparing when order has no items', async () => {
+      const data: MessageData = {
+        from: '81999999999',
+        text: 'marcar pedido em preparo',
+        userContext: UserContext.RESTAURANT,
+        restaurantId: 'restaurant-123',
+      };
+
+      const order = Order.create({
+        id: 'order-123',
+        restaurantId: 'restaurant-123',
+        customerId: 'customer-123',
+        status: OrderStatus.PAID,
+        total: Price.create(25),
+      });
+
+      orderRepository.findByRestaurantAndStatus = jest.fn().mockResolvedValue([order] as any);
+      orderItemRepository.findByOrderId = jest.fn().mockResolvedValue([]);
+
+      await handler.handle(Intent.MARCAR_PEDIDO_PREPARO, data);
+
+      expect(evolutionApi.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('pedido sem itens'),
+        })
+      );
     });
   });
 
@@ -168,10 +208,15 @@ describe('RestaurantManagementHandler Integration', () => {
         makeOrder('ready-1', OrderStatus.READY, new Date('2024-01-01')),
         makeOrder('ready-2', OrderStatus.READY, new Date('2024-01-02')),
       ];
+      const newOrders = [
+        makeOrder('new-2', OrderStatus.NEW, new Date('2024-01-02')),
+        makeOrder('new-1', OrderStatus.NEW, new Date('2024-01-01')),
+      ];
 
       orderRepository.findByRestaurantAndStatus = jest
         .fn()
         .mockImplementation((_, status: OrderStatus) => {
+          if (status === OrderStatus.NEW) return Promise.resolve(newOrders);
           if (status === OrderStatus.PREPARING) return Promise.resolve(preparingOrders);
           if (status === OrderStatus.READY) return Promise.resolve(readyOrders);
           return Promise.resolve([]);
@@ -180,6 +225,8 @@ describe('RestaurantManagementHandler Integration', () => {
       await handler.handle(Intent.CONSULTAR_FILA_COZINHA, data);
 
       const message = (evolutionApi.sendMessage as jest.Mock).mock.calls[0][0].text;
+      expect(message).toContain('new-1'.slice(0, 8));
+      expect(message).toContain('new-2'.slice(0, 8));
       expect(message).toContain('prep-1'.slice(0, 8));
       expect(message).toContain('prep-2'.slice(0, 8));
       expect(message).toContain('ready-1'.slice(0, 8));

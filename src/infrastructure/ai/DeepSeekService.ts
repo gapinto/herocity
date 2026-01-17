@@ -71,6 +71,8 @@ INTENÇÕES DO RESTAURANTE:
 - consultar_pedidos_pendentes: listar pedidos não preparados
 - consultar_fila_cozinha: listar fila única da cozinha (preparing + top ready)
 - detalhar_pedido_cozinha: mostrar detalhes de um pedido específico informado por id/numero
+- consultar_horario_funcionamento: exibir horários de funcionamento do restaurante
+- atualizar_horario_funcionamento: atualizar horários do restaurante (dias/horários)
 - notificar_cliente: enviar mensagens de status manualmente
 - bloquear_item_cardapio: desabilitar item temporariamente
 - desbloquear_item_cardapio: habilitar item novamente
@@ -88,6 +90,8 @@ IMPORTANTE:
 -
 - Se o restaurante pedir "fila cozinha", "fila da cozinha", "pedidos em preparo" ou similar, use "consultar_fila_cozinha"
 - Se o restaurante pedir "detalhe 123", "detalhe pedido 123" ou similar, use "detalhar_pedido_cozinha"
+- Se o restaurante pedir "horário", "horario", "horário de funcionamento", use "consultar_horario_funcionamento"
+- Se o restaurante pedir "definir horario", "ajustar horario", "configurar horario", use "atualizar_horario_funcionamento"
 
 FORMATO DE RESPOSTA (JSON):
 {

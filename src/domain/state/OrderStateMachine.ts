@@ -2,6 +2,7 @@ import { OrderStatus } from '../enums/OrderStatus';
 import { Order } from '../entities/Order';
 
 export type McpOrderStatus =
+  | 'MONTANDO'
   | 'NEW'
   | 'BUILDING'
   | 'AWAITING_PAYMENT'
@@ -13,8 +14,10 @@ export type McpOrderStatus =
   | 'CANCELLED';
 
 const mcpToDomainMap: Record<string, OrderStatus> = {
-  NEW: OrderStatus.DRAFT,
+  MONTANDO: OrderStatus.DRAFT,
+  NEW: OrderStatus.NEW,
   BUILDING: OrderStatus.DRAFT,
+  WAITING_PAYMENT: OrderStatus.AWAITING_PAYMENT,
   AWAITING_PAYMENT: OrderStatus.AWAITING_PAYMENT,
   PAID: OrderStatus.PAID,
   IN_PREPARATION: OrderStatus.PREPARING,
@@ -25,19 +28,21 @@ const mcpToDomainMap: Record<string, OrderStatus> = {
 };
 
 const domainToMcpMap: Record<OrderStatus, McpOrderStatus> = {
-  [OrderStatus.DRAFT]: 'BUILDING',
-  [OrderStatus.AWAITING_PAYMENT]: 'AWAITING_PAYMENT',
+  [OrderStatus.DRAFT]: 'MONTANDO',
+  [OrderStatus.NEW]: 'NEW',
+  [OrderStatus.AWAITING_PAYMENT]: 'NEW',
   [OrderStatus.PAID]: 'PAID',
   [OrderStatus.PREPARING]: 'IN_PREPARATION',
   [OrderStatus.READY]: 'READY',
   [OrderStatus.DELIVERED]: 'DELIVERED',
   [OrderStatus.CANCELLED]: 'CANCELLED',
   // Compat
-  [OrderStatus.PENDING]: 'BUILDING',
+  [OrderStatus.PENDING]: 'MONTANDO',
 };
 
 export class OrderStateMachine {
   static buildKitchenQueue(
+    newOrders: Order[],
     preparingOrders: Order[],
     readyOrders: Order[],
     readyLimit = 5
@@ -45,10 +50,11 @@ export class OrderStateMachine {
     const byCreatedAsc = (a: Order, b: Order) =>
       a.getCreatedAt().getTime() - b.getCreatedAt().getTime();
 
+    const newSorted = [...newOrders].sort(byCreatedAsc);
     const preparingSorted = [...preparingOrders].sort(byCreatedAsc);
     const readySorted = [...readyOrders].sort(byCreatedAsc).slice(0, readyLimit);
 
-    return [...preparingSorted, ...readySorted];
+    return [...newSorted, ...preparingSorted, ...readySorted];
   }
 
   static toDomainStatus(status: string): OrderStatus {
@@ -61,24 +67,28 @@ export class OrderStateMachine {
   }
 
   static toMcpStatus(status: OrderStatus): McpOrderStatus {
-    return domainToMcpMap[status] || 'BUILDING';
+    return domainToMcpMap[status] || 'MONTANDO';
   }
 
   static assertCanModify(status: OrderStatus): void {
-    if (status !== OrderStatus.DRAFT) {
-      throw new Error('Order can only be modified while BUILDING');
+    if (status !== OrderStatus.DRAFT && status !== OrderStatus.NEW) {
+      throw new Error('Order can only be modified while MONTANDO or NEW');
     }
   }
 
   static assertCanCancel(status: OrderStatus): void {
-    if (status !== OrderStatus.DRAFT && status !== OrderStatus.AWAITING_PAYMENT) {
+    if (
+      status !== OrderStatus.DRAFT &&
+      status !== OrderStatus.NEW &&
+      status !== OrderStatus.AWAITING_PAYMENT
+    ) {
       throw new Error('Order can only be cancelled before IN_PREPARATION');
     }
   }
 
   static assertCanRequestPayment(status: OrderStatus): void {
-    if (status !== OrderStatus.DRAFT) {
-      throw new Error('Payment can only be requested for BUILDING orders');
+    if (status !== OrderStatus.NEW && status !== OrderStatus.AWAITING_PAYMENT) {
+      throw new Error('Payment can only be requested for NEW orders');
     }
   }
 
@@ -92,7 +102,7 @@ export class OrderStateMachine {
     if (status === OrderStatus.PAID) {
       return;
     }
-    if (allowBeforePayment && status === OrderStatus.AWAITING_PAYMENT) {
+    if (allowBeforePayment && (status === OrderStatus.AWAITING_PAYMENT || status === OrderStatus.NEW)) {
       return;
     }
     throw new Error('Kitchen can only be notified after payment is confirmed');
@@ -102,7 +112,10 @@ export class OrderStateMachine {
     if (status === OrderStatus.PAID) {
       return;
     }
-    if (allowBeforePayment && (status === OrderStatus.AWAITING_PAYMENT || status === OrderStatus.DRAFT)) {
+    if (
+      allowBeforePayment &&
+      (status === OrderStatus.AWAITING_PAYMENT || status === OrderStatus.NEW)
+    ) {
       return;
     }
     throw new Error('Order can only move to IN_PREPARATION from PAID');

@@ -1,6 +1,7 @@
 import { Phone } from '../value-objects/Phone';
 import { MenuRulesConfig } from '../types/MenuRules';
 import { BankAccountData } from '../types/BankAccount';
+import { getTimezoneOrDefault } from '../../shared/utils/timezone';
 
 export interface RestaurantProps {
   id?: string;
@@ -15,6 +16,8 @@ export interface RestaurantProps {
   state: string;
   isActive?: boolean;
   menuRules?: MenuRulesConfig;
+  timezone?: string;
+  openingHours?: OpeningHour[];
   // Dados para criação de subconta no provedor de pagamento
   legalName?: string; // Razão social / Nome completo (PF)
   cpfCnpj?: string; // CPF (PF) ou CNPJ (PJ)
@@ -32,6 +35,12 @@ export interface RestaurantProps {
   updatedAt?: Date;
 }
 
+export interface OpeningHour {
+  day: number; // 0 (domingo) - 6 (sábado)
+  open: string; // HH:mm
+  close: string; // HH:mm
+}
+
 export class Restaurant {
   private id: string;
   private name: string; // Nome fantasia
@@ -45,6 +54,8 @@ export class Restaurant {
   private state: string;
   private _isActive: boolean;
   private menuRules?: MenuRulesConfig;
+  private timezone?: string;
+  private openingHours?: OpeningHour[];
   // Dados para criação de subconta no provedor de pagamento
   private legalName?: string; // Razão social / Nome completo (PF)
   private cpfCnpj?: string; // CPF (PF) ou CNPJ (PJ)
@@ -74,6 +85,8 @@ export class Restaurant {
     this.state = props.state;
     this._isActive = props.isActive ?? true;
     this.menuRules = props.menuRules;
+    this.timezone = props.timezone;
+    this.openingHours = props.openingHours;
     this.legalName = props.legalName;
     this.cpfCnpj = props.cpfCnpj;
     this.email = props.email;
@@ -102,11 +115,42 @@ export class Restaurant {
     props: Required<
       Omit<
         RestaurantProps,
-        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'incomeValue' | 'allowKitchenNotifyBeforePayment' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
+        'legalName' |
+          'cpfCnpj' |
+          'email' |
+          'bankAccount' |
+          'documentUrl' |
+          'birthDate' |
+          'incomeValue' |
+          'allowKitchenNotifyBeforePayment' |
+          'paymentAccountId' |
+          'paymentWalletId' |
+          'paymentWebhookUrl' |
+          'paymentWebhookToken' |
+          'menuRules' |
+          'timezone' |
+          'openingHours'
       >
     > &
       Partial<
-        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'incomeValue' | 'allowKitchenNotifyBeforePayment' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
+        Pick<
+          RestaurantProps,
+          | 'legalName'
+          | 'cpfCnpj'
+          | 'email'
+          | 'bankAccount'
+          | 'documentUrl'
+          | 'birthDate'
+          | 'incomeValue'
+          | 'allowKitchenNotifyBeforePayment'
+          | 'paymentAccountId'
+          | 'paymentWalletId'
+          | 'paymentWebhookUrl'
+          | 'paymentWebhookToken'
+          | 'menuRules'
+          | 'timezone'
+          | 'openingHours'
+        >
       >
   ): Restaurant {
     return new Restaurant(props);
@@ -176,6 +220,14 @@ export class Restaurant {
 
   getMenuRules(): MenuRulesConfig | undefined {
     return this.menuRules;
+  }
+
+  getTimezone(): string | undefined {
+    return this.timezone;
+  }
+
+  getOpeningHours(): OpeningHour[] | undefined {
+    return this.openingHours ? [...this.openingHours] : undefined;
   }
 
   // Dados para criação de subconta no provedor de pagamento
@@ -326,6 +378,77 @@ export class Restaurant {
     if (data.city !== undefined) this.city = data.city;
     if (data.state !== undefined) this.state = data.state;
     this.updatedAt = new Date();
+  }
+
+  updateOperatingHours(data: { timezone?: string; openingHours?: OpeningHour[] }): void {
+    if (data.timezone !== undefined) this.timezone = data.timezone;
+    if (data.openingHours !== undefined) this.openingHours = data.openingHours;
+    this.updatedAt = new Date();
+  }
+
+  isOpenAt(date: Date): boolean {
+    if (!this.openingHours || this.openingHours.length === 0) {
+      return true;
+    }
+
+    let timeZone = getTimezoneOrDefault(this.timezone);
+    let formatter: Intl.DateTimeFormat;
+    try {
+      formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch (error) {
+      timeZone = 'America/Recife';
+      formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+    const parts = formatter.formatToParts(date);
+    const weekdayPart = parts.find((part) => part.type === 'weekday')?.value ?? '';
+    const hourPart = parts.find((part) => part.type === 'hour')?.value ?? '00';
+    const minutePart = parts.find((part) => part.type === 'minute')?.value ?? '00';
+
+    const dayMap: Record<string, number> = {
+      Sun: 0,
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+    };
+    const dayIndex = dayMap[weekdayPart] ?? date.getDay();
+    const currentMinutes = parseInt(hourPart, 10) * 60 + parseInt(minutePart, 10);
+
+    const intervals = this.openingHours.filter((interval) => interval.day === dayIndex);
+    if (intervals.length === 0) {
+      return false;
+    }
+
+    return intervals.some((interval) => {
+      const [openHour, openMinute] = interval.open.split(':').map(Number);
+      const [closeHour, closeMinute] = interval.close.split(':').map(Number);
+      const openMinutes = openHour * 60 + openMinute;
+      const closeMinutes = closeHour * 60 + closeMinute;
+
+      if (Number.isNaN(openMinutes) || Number.isNaN(closeMinutes)) {
+        return false;
+      }
+
+      if (closeMinutes < openMinutes) {
+        return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
+      }
+
+      return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    });
   }
 }
 

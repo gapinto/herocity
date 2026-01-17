@@ -4,6 +4,7 @@ import { IIdempotencyService } from '../../domain/services/IIdempotencyService';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
 import { NotificationService } from '../../application/services/NotificationService';
+import { MessageFormatter } from '../../application/services/MessageFormatter';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { Price } from '../../domain/value-objects/Price';
 import { logger } from '../../shared/utils/logger';
@@ -122,7 +123,7 @@ export function createPaymentWebhookRoutes(
 
           await notificationService.notifyRestaurant(
             order.getRestaurantId(),
-            `💳 Pagamento confirmado para o pedido #${order.getId().slice(0, 8)}.`
+            `💳 Pagamento confirmado para o pedido #${MessageFormatter.formatOrderNumber(order)}.`
           );
         }
 
@@ -157,7 +158,7 @@ export function createPaymentWebhookRoutes(
           return res.status(404).json({ error: 'Order not found' });
         }
 
-        const orderId = order.getId().slice(0, 8);
+        const orderId = MessageFormatter.formatOrderNumber(order);
         const customerMessages: Record<string, string> = {
           PAYMENT_SPLIT_DONE: `✅ Pagamento confirmado e repasse concluído para o pedido #${orderId}.`,
           PAYMENT_SPLIT_REFUSED: `⚠️ O repasse do pagamento foi recusado para o pedido #${orderId}. Nossa equipe vai verificar.`,

@@ -26,6 +26,8 @@ export class PrismaOrderRepository implements IOrderRepository {
       platformFee: data.platformFee ? Price.create(Number(data.platformFee)) : undefined,
       restaurantAmount: data.restaurantAmount ? Price.create(Number(data.restaurantAmount)) : undefined,
       paidAt: data.paidAt || undefined,
+      dailySequence: data.dailySequence ?? undefined,
+      sequenceDate: data.sequenceDate || undefined,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     });
@@ -50,6 +52,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
+      dailySequence: item.dailySequence ?? undefined,
+      sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -75,6 +79,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
+      dailySequence: item.dailySequence ?? undefined,
+      sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -158,6 +164,8 @@ export class PrismaOrderRepository implements IOrderRepository {
       platformFee: data.platformFee ? Price.create(Number(data.platformFee)) : undefined,
       restaurantAmount: data.restaurantAmount ? Price.create(Number(data.restaurantAmount)) : undefined,
       paidAt: data.paidAt || undefined,
+      dailySequence: data.dailySequence ?? undefined,
+      sequenceDate: data.sequenceDate || undefined,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     });
@@ -175,16 +183,59 @@ export class PrismaOrderRepository implements IOrderRepository {
       platformFee: order.getPlatformFee()?.getValue() || null,
       restaurantAmount: order.getRestaurantAmount()?.getValue() || null,
       paidAt: order.getPaidAt() || null,
+      dailySequence: order.getDailySequence() ?? null,
+      sequenceDate: order.getSequenceDate() ?? null,
     };
 
     const id = order.getId().trim();
     const saved = id
-      ? await this.prisma.order.update({
-          where: { id },
-          data,
+      ? await this.prisma.$transaction(async (tx) => {
+          if (order.getStatus() !== OrderStatus.NEW || order.getDailySequence()) {
+            return await tx.order.update({
+              where: { id },
+              data,
+            });
+          }
+
+          const sequenceDate = order.getSequenceDate() ?? new Date();
+          const maxSequence = await tx.order.aggregate({
+            where: {
+              restaurantId: order.getRestaurantId(),
+              sequenceDate,
+            },
+            _max: { dailySequence: true },
+          });
+          const nextSequence = (maxSequence._max.dailySequence ?? 0) + 1;
+          return await tx.order.update({
+            where: { id },
+            data: {
+              ...data,
+              sequenceDate,
+              dailySequence: nextSequence,
+            },
+          });
         })
-      : await this.prisma.order.create({
-          data,
+      : await this.prisma.$transaction(async (tx) => {
+          if (order.getStatus() !== OrderStatus.NEW) {
+            return await tx.order.create({ data });
+          }
+
+          const sequenceDate = order.getSequenceDate() ?? new Date();
+          const maxSequence = await tx.order.aggregate({
+            where: {
+              restaurantId: order.getRestaurantId(),
+              sequenceDate,
+            },
+            _max: { dailySequence: true },
+          });
+          const nextSequence = (maxSequence._max.dailySequence ?? 0) + 1;
+          return await tx.order.create({
+            data: {
+              ...data,
+              sequenceDate,
+              dailySequence: nextSequence,
+            },
+          });
         });
 
     return Order.fromPersistence({
@@ -199,6 +250,8 @@ export class PrismaOrderRepository implements IOrderRepository {
       platformFee: saved.platformFee ? Price.create(Number(saved.platformFee)) : undefined,
       restaurantAmount: saved.restaurantAmount ? Price.create(Number(saved.restaurantAmount)) : undefined,
       paidAt: saved.paidAt || undefined,
+      dailySequence: saved.dailySequence ?? undefined,
+      sequenceDate: saved.sequenceDate || undefined,
       createdAt: saved.createdAt,
       updatedAt: saved.updatedAt,
     });

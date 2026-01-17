@@ -4,6 +4,7 @@ import { EvolutionApiService } from '../../infrastructure/messaging/EvolutionApi
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IMenuItemRepository } from '../../domain/repositories/IMenuItemRepository';
 import { IOrderItemRepository } from '../../domain/repositories/IOrderItemRepository';
+import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { NotificationService } from '../services/NotificationService';
 import { UpdateMenuItem } from '../../domain/usecases/UpdateMenuItem';
@@ -11,6 +12,7 @@ import { CreateMenuItem } from '../../domain/usecases/CreateMenuItem';
 import { MessageFormatter } from '../services/MessageFormatter';
 import { OrderStateMachine } from '../../domain/state/OrderStateMachine';
 import { logger } from '../../shared/utils/logger';
+import { OpeningHour } from '../../domain/entities/Restaurant';
 
 export class RestaurantManagementHandler {
   constructor(
@@ -18,6 +20,7 @@ export class RestaurantManagementHandler {
     private readonly orderRepository: IOrderRepository,
     private readonly menuItemRepository: IMenuItemRepository,
     private readonly orderItemRepository: IOrderItemRepository,
+    private readonly restaurantRepository: IRestaurantRepository,
     private readonly notificationService: NotificationService,
     private readonly updateMenuItem: UpdateMenuItem,
     private readonly createMenuItem: CreateMenuItem
@@ -43,6 +46,12 @@ export class RestaurantManagementHandler {
           break;
         case Intent.DETALHAR_PEDIDO_COZINHA:
           await this.handleKitchenOrderDetail(data);
+          break;
+        case Intent.CONSULTAR_HORARIO_FUNCIONAMENTO:
+          await this.handleShowOperatingHours(data);
+          break;
+        case Intent.ATUALIZAR_HORARIO_FUNCIONAMENTO:
+          await this.handleUpdateOperatingHours(data);
           break;
         case Intent.BLOQUEAR_ITEM_CARDAPIO:
           await this.handleBlockItem(data);
@@ -129,6 +138,15 @@ export class RestaurantManagementHandler {
 
       // Pega o primeiro pedido pago
       const order = orders[0];
+      const orderItems = await this.orderItemRepository.findByOrderId(order.getId());
+      if (orderItems.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Não é possível iniciar preparo: pedido sem itens.',
+        });
+        return;
+      }
+      const orderNumber = MessageFormatter.formatOrderNumber(order);
       order.updateStatus(OrderStatus.PREPARING);
       await this.orderRepository.save(order);
 
@@ -137,7 +155,7 @@ export class RestaurantManagementHandler {
 
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `✅ Pedido #${order.getId().slice(0, 8)} marcado como em preparo!\n\nCliente foi notificado.`,
+        text: `✅ Pedido #${orderNumber} marcado como em preparo!\n\nCliente foi notificado.`,
       });
     } catch (error: any) {
       logger.error('Error marking order as preparing', { error: error.message });
@@ -173,6 +191,15 @@ export class RestaurantManagementHandler {
 
       // Pega o primeiro pedido em preparo
       const order = orders[0];
+      const orderItems = await this.orderItemRepository.findByOrderId(order.getId());
+      if (orderItems.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Não é possível marcar como pronto: pedido sem itens.',
+        });
+        return;
+      }
+      const orderNumber = MessageFormatter.formatOrderNumber(order);
       order.updateStatus(OrderStatus.READY);
       await this.orderRepository.save(order);
 
@@ -181,7 +208,7 @@ export class RestaurantManagementHandler {
 
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `✅ Pedido #${order.getId().slice(0, 8)} marcado como pronto!\n\nCliente foi notificado.`,
+        text: `✅ Pedido #${orderNumber} marcado como pronto!\n\nCliente foi notificado.`,
       });
     } catch (error: any) {
       logger.error('Error marking order as ready', { error: error.message });
@@ -217,7 +244,8 @@ export class RestaurantManagementHandler {
 
       const ordersList = orders
         .map((order, index) => {
-          return `${index + 1}. Pedido #${order.getId().slice(0, 8)} - ${order.getTotal().getFormatted()}`;
+          const orderNumber = MessageFormatter.formatOrderNumber(order);
+          return `${index + 1}. Pedido #${orderNumber} - ${order.getTotal().getFormatted()}`;
         })
         .join('\n');
 
@@ -244,6 +272,10 @@ export class RestaurantManagementHandler {
     }
 
     try {
+      const newOrders = await this.orderRepository.findByRestaurantAndStatus(
+        data.restaurantId,
+        OrderStatus.NEW
+      );
       const preparingOrders = await this.orderRepository.findByRestaurantAndStatus(
         data.restaurantId,
         OrderStatus.PREPARING
@@ -253,7 +285,7 @@ export class RestaurantManagementHandler {
         OrderStatus.READY
       );
 
-      const queue = OrderStateMachine.buildKitchenQueue(preparingOrders, readyOrders, 5);
+      const queue = OrderStateMachine.buildKitchenQueue(newOrders, preparingOrders, readyOrders, 5);
 
       if (queue.length === 0) {
         await this.evolutionApi.sendMessage({
@@ -264,8 +296,14 @@ export class RestaurantManagementHandler {
       }
 
       const lines = queue.map((order, index) => {
-        const statusIcon = order.getStatus() === OrderStatus.PREPARING ? '👨‍🍳' : '✅';
-        return `${index + 1}. ${statusIcon} Pedido #${order.getId().slice(0, 8)} - ${order.getTotal().getFormatted()}`;
+        const orderNumber = MessageFormatter.formatOrderNumber(order);
+        const statusIcon =
+          order.getStatus() === OrderStatus.NEW
+            ? '🆕'
+            : order.getStatus() === OrderStatus.PREPARING
+              ? '👨‍🍳'
+              : '✅';
+        return `${index + 1}. ${statusIcon} Pedido #${orderNumber} - ${order.getTotal().getFormatted()}`;
       });
 
       await this.evolutionApi.sendMessage({
@@ -314,7 +352,9 @@ export class RestaurantManagementHandler {
       }
 
       if (matches.length > 1) {
-        const options = matches.map((order) => `#${order.getId().slice(0, 8)}`).join(', ');
+        const options = matches
+          .map((order) => `#${MessageFormatter.formatOrderNumber(order)}`)
+          .join(', ');
         await this.evolutionApi.sendMessage({
           to: data.from,
           text: `🔎 Encontramos mais de um pedido: ${options}\n\nEnvie um ID mais específico.`,
@@ -347,15 +387,20 @@ export class RestaurantManagementHandler {
               .join('\n');
 
       const statusLabel =
-        order.getStatus() === OrderStatus.PREPARING
-          ? '👨‍🍳 Em preparo'
-          : order.getStatus() === OrderStatus.READY
-            ? '✅ Pronto'
-            : order.getStatus();
+        order.getStatus() === OrderStatus.DRAFT
+          ? '🛠️ Montando'
+          : order.getStatus() === OrderStatus.NEW
+            ? '🆕 Novo'
+            : order.getStatus() === OrderStatus.PREPARING
+              ? '👨‍🍳 Em preparo'
+              : order.getStatus() === OrderStatus.READY
+                ? '✅ Pronto'
+                : order.getStatus();
 
+      const orderNumber = MessageFormatter.formatOrderNumber(order);
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `📦 Pedido #${order.getId().slice(0, 8)}\n\nStatus: ${statusLabel}\n\nItens:\n${itemsText}\n\nTotal: ${order.getTotal().getFormatted()}`,
+        text: `📦 Pedido #${orderNumber}\n\nStatus: ${statusLabel}\n\nItens:\n${itemsText}\n\nTotal: ${order.getTotal().getFormatted()}`,
       });
     } catch (error: any) {
       logger.error('Error fetching kitchen order details', { error: error.message });
@@ -379,6 +424,226 @@ export class RestaurantManagementHandler {
 
     const fallback = text.match(/[a-z0-9]{6,}/i);
     return fallback ? fallback[0] : null;
+  }
+
+  private async handleShowOperatingHours(data: MessageData): Promise<void> {
+    if (!data.restaurantId) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro: Restaurante não identificado.',
+      });
+      return;
+    }
+
+    try {
+      const restaurant = await this.restaurantRepository.findById(data.restaurantId);
+      if (!restaurant) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Restaurante não encontrado.',
+        });
+        return;
+      }
+
+      const openingHours = restaurant.getOpeningHours() || [];
+      const timezone = restaurant.getTimezone() || 'America/Recife';
+      if (openingHours.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: `⏰ Horários não configurados.\nTimezone: ${timezone}\n\nPara definir: "horario set seg-sex 09:00-18:00; sab 10:00-14:00"`,
+        });
+        return;
+      }
+
+      const formatted = this.formatOpeningHours(openingHours);
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `⏰ Horários de funcionamento (timezone: ${timezone}):\n\n${formatted}`,
+      });
+    } catch (error: any) {
+      logger.error('Error showing operating hours', { error: error.message });
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro ao consultar horários de funcionamento.',
+      });
+    }
+  }
+
+  private async handleUpdateOperatingHours(data: MessageData): Promise<void> {
+    if (!data.restaurantId) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro: Restaurante não identificado.',
+      });
+      return;
+    }
+
+    const parsed = this.parseOperatingHoursInput(data.text);
+    if (!parsed) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text:
+          '❌ Formato inválido.\nExemplo: "horario set seg-sex 09:00-18:00; sab 10:00-14:00"\nOpcional: "tz=America/Recife"',
+      });
+      return;
+    }
+
+    try {
+      const restaurant = await this.restaurantRepository.findById(data.restaurantId);
+      if (!restaurant) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Restaurante não encontrado.',
+        });
+        return;
+      }
+
+      restaurant.updateOperatingHours({
+        timezone: parsed.timezone,
+        openingHours: parsed.openingHours,
+      });
+      const saved = await this.restaurantRepository.save(restaurant);
+
+      const formatted = this.formatOpeningHours(saved.getOpeningHours() || []);
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `✅ Horários atualizados.\nTimezone: ${saved.getTimezone() || 'America/Recife'}\n\n${formatted}`,
+      });
+    } catch (error: any) {
+      logger.error('Error updating operating hours', { error: error.message });
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro ao atualizar horários de funcionamento.',
+      });
+    }
+  }
+
+  private parseOperatingHoursInput(
+    text: string
+  ): { timezone?: string; openingHours: OpeningHour[] } | null {
+    const normalized = text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    const timezoneMatch = normalized.match(/(?:tz|timezone)\s*=?\s*([a-z_\/]+)/i);
+    const timezone = timezoneMatch?.[1];
+
+    const segments = normalized
+      .replace(/horario|horario de funcionamento|horario set|definir horario|ajustar horario/g, '')
+      .split(';')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length === 0) {
+      return null;
+    }
+
+    const openingHours: OpeningHour[] = [];
+
+    for (const segment of segments) {
+      if (segment.includes('fechado')) {
+        continue;
+      }
+
+      const timeMatch = segment.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (!timeMatch) {
+        return null;
+      }
+      const open = timeMatch[1];
+      const close = timeMatch[2];
+
+      const dayToken = segment.replace(timeMatch[0], '').trim().split(/\s+/)[0];
+      const days = this.parseDaysToken(dayToken);
+      if (!days || days.length === 0) {
+        return null;
+      }
+
+      for (const day of days) {
+        openingHours.push({ day, open, close });
+      }
+    }
+
+    return { timezone, openingHours };
+  }
+
+  private parseDaysToken(token: string): number[] | null {
+    const map: Record<string, number> = {
+      dom: 0,
+      domingo: 0,
+      seg: 1,
+      segunda: 1,
+      ter: 2,
+      terca: 2,
+      qua: 3,
+      quarta: 3,
+      qui: 4,
+      quinta: 4,
+      sex: 5,
+      sexta: 5,
+      sab: 6,
+      sabado: 6,
+    };
+
+    const cleaned = token
+      .replace(/[^a-z0-9,\-]/g, '')
+      .trim();
+    if (!cleaned) {
+      return null;
+    }
+
+    const resolveDay = (value: string): number | null => {
+      if (/^\d$/.test(value)) {
+        const day = parseInt(value, 10);
+        return day >= 0 && day <= 6 ? day : null;
+      }
+      return map[value] ?? null;
+    };
+
+    if (cleaned.includes(',')) {
+      const parts = cleaned.split(',').map((value) => value.trim());
+      const days = parts.map(resolveDay).filter((day): day is number => day !== null);
+      return days.length ? days : null;
+    }
+
+    if (cleaned.includes('-')) {
+      const [start, end] = cleaned.split('-').map((value) => value.trim());
+      const startDay = resolveDay(start);
+      const endDay = resolveDay(end);
+      if (startDay === null || endDay === null) return null;
+
+      const days: number[] = [];
+      for (let day = startDay; day <= endDay; day += 1) {
+        days.push(day);
+      }
+      return days;
+    }
+
+    const single = resolveDay(cleaned);
+    return single === null ? null : [single];
+  }
+
+  private formatOpeningHours(openingHours: OpeningHour[]): string {
+    const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+    const grouped: Record<number, OpeningHour[]> = {};
+
+    for (const entry of openingHours) {
+      grouped[entry.day] = grouped[entry.day] || [];
+      grouped[entry.day].push(entry);
+    }
+
+    return dayLabels
+      .map((label, day) => {
+        const intervals = grouped[day] || [];
+        if (intervals.length === 0) {
+          return `${label}: fechado`;
+        }
+        const formatted = intervals
+          .map((interval) => `${interval.open}-${interval.close}`)
+          .join(', ');
+        return `${label}: ${formatted}`;
+      })
+      .join('\n');
   }
 
   private async handleBlockItem(data: MessageData): Promise<void> {

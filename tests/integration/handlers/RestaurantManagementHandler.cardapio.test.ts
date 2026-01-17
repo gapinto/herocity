@@ -3,6 +3,7 @@ import { EvolutionApiService } from '../../../src/infrastructure/messaging/Evolu
 import { IOrderRepository } from '../../../src/domain/repositories/IOrderRepository';
 import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemRepository';
 import { IOrderItemRepository } from '../../../src/domain/repositories/IOrderItemRepository';
+import { IRestaurantRepository } from '../../../src/domain/repositories/IRestaurantRepository';
 import { NotificationService } from '../../../src/application/services/NotificationService';
 import { UpdateMenuItem } from '../../../src/domain/usecases/UpdateMenuItem';
 import { MessageData } from '../../../src/application/services/OrchestrationService';
@@ -20,6 +21,7 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
   let mockOrderRepository: jest.Mocked<IOrderRepository>;
   let mockMenuItemRepository: jest.Mocked<IMenuItemRepository>;
   let mockOrderItemRepository: jest.Mocked<IOrderItemRepository>;
+  let mockRestaurantRepository: jest.Mocked<IRestaurantRepository>;
   let mockNotificationService: jest.Mocked<NotificationService>;
   let mockUpdateMenuItem: jest.Mocked<UpdateMenuItem>;
   let mockCreateMenuItem: jest.Mocked<CreateMenuItem>;
@@ -53,6 +55,14 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
       delete: jest.fn(),
     } as any;
 
+    mockRestaurantRepository = {
+      findById: jest.fn(),
+      findByPhone: jest.fn(),
+      findAll: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
     mockNotificationService = {} as any;
     mockUpdateMenuItem = {} as any;
     mockCreateMenuItem = {
@@ -73,6 +83,7 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
       mockOrderRepository,
       mockMenuItemRepository,
       mockOrderItemRepository,
+      mockRestaurantRepository,
       mockNotificationService,
       mockUpdateMenuItem,
       mockCreateMenuItem

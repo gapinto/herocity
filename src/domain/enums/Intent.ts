@@ -18,6 +18,8 @@ export enum Intent {
   CONSULTAR_PEDIDOS_PENDENTES = 'consultar_pedidos_pendentes',
   CONSULTAR_FILA_COZINHA = 'consultar_fila_cozinha',
   DETALHAR_PEDIDO_COZINHA = 'detalhar_pedido_cozinha',
+  CONSULTAR_HORARIO_FUNCIONAMENTO = 'consultar_horario_funcionamento',
+  ATUALIZAR_HORARIO_FUNCIONAMENTO = 'atualizar_horario_funcionamento',
   NOTIFICAR_CLIENTE = 'notificar_cliente',
   BLOQUEAR_ITEM_CARDAPIO = 'bloquear_item_cardapio',
   DESBLOQUEAR_ITEM_CARDAPIO = 'desbloquear_item_cardapio',

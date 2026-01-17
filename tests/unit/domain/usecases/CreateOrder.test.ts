@@ -77,6 +77,7 @@ describe('CreateOrder', () => {
       phone: Phone.create('81999999999'),
       ...baseAddress,
       isActive: true,
+      timezone: 'America/Recife',
     });
 
     const menuItem1 = MenuItem.create({
@@ -105,7 +106,7 @@ describe('CreateOrder', () => {
       restaurantId: restaurant.getId(),
       customerId: 'customer-123',
       total: Price.create(56.00),
-      status: OrderStatus.PENDING,
+      status: OrderStatus.NEW,
     });
     orderRepository.save.mockResolvedValue(savedOrder);
 
@@ -116,10 +117,13 @@ describe('CreateOrder', () => {
         { menuItemId: menuItem1.getId(), quantity: 2 },
         { menuItemId: menuItem2.getId(), quantity: 1 },
       ],
+      status: OrderStatus.NEW,
     });
 
     expect(result).toBeDefined();
     expect(orderRepository.save).toHaveBeenCalled();
+    const saved = (orderRepository.save as jest.Mock).mock.calls[0][0] as Order;
+    expect(saved.getSequenceDate()).toBeDefined();
     expect(orderItemRepository.save).toHaveBeenCalledTimes(2);
   });
 
@@ -162,6 +166,42 @@ describe('CreateOrder', () => {
         items: [{ menuItemId: menuItem.getId(), quantity: 1 }],
       })
     ).rejects.toThrow('not available');
+  });
+
+  it('should throw error if restaurant is closed', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-01-19T12:00:00.000Z'));
+
+    const restaurant = Restaurant.create({
+      id: 'restaurant-123',
+      name: 'Restaurante Teste',
+      phone: Phone.create('81999999999'),
+      ...baseAddress,
+      isActive: true,
+      timezone: 'America/Recife',
+      openingHours: [{ day: 1, open: '10:00', close: '11:00' }],
+    });
+
+    const menuItem = MenuItem.create({
+      id: 'menu-item-1',
+      restaurantId: restaurant.getId(),
+      name: 'Hambúrguer',
+      price: Price.create(25.50),
+      isAvailable: true,
+    });
+
+    restaurantRepository.findById.mockResolvedValue(restaurant);
+    menuItemRepository.findById.mockResolvedValue(menuItem);
+
+    await expect(
+      createOrder.execute({
+        restaurantId: restaurant.getId(),
+        customerId: 'customer-123',
+        items: [{ menuItemId: menuItem.getId(), quantity: 1 }],
+        status: OrderStatus.NEW,
+      })
+    ).rejects.toThrow('Restaurant is closed');
+
+    jest.useRealTimers();
   });
 });
 

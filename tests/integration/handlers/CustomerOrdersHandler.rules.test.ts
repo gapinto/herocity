@@ -12,6 +12,8 @@ import { Order } from '../../../src/domain/entities/Order';
 import { OrderStatus } from '../../../src/domain/enums/OrderStatus';
 import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
 import { IPaymentService } from '../../../src/domain/services/IPaymentService';
+import { IOrderItemRepository } from '../../../src/domain/repositories/IOrderItemRepository';
+import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
 
 describe('CustomerOrdersHandler - Menu Rules Integration', () => {
   let handler: CustomerOrdersHandler;
@@ -21,6 +23,8 @@ describe('CustomerOrdersHandler - Menu Rules Integration', () => {
   let createOrder: jest.Mocked<CreateOrder>;
   let orderState: jest.Mocked<IOrderStateService>;
   let paymentService: jest.Mocked<IPaymentService>;
+  let orderItemRepository: jest.Mocked<IOrderItemRepository>;
+  let customerRepository: jest.Mocked<ICustomerRepository>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -43,6 +47,7 @@ describe('CustomerOrdersHandler - Menu Rules Integration', () => {
       save: jest.fn(),
       delete: jest.fn(),
     } as any;
+    restaurantRepository.findById.mockResolvedValue({ isOpenAt: () => true } as any);
 
     createOrder = {
       execute: jest.fn(),
@@ -79,11 +84,28 @@ describe('CustomerOrdersHandler - Menu Rules Integration', () => {
       cancelPayment: jest.fn(),
     } as any;
 
+    orderItemRepository = {
+      findByOrderId: jest.fn().mockResolvedValue([]),
+      findById: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      deleteByOrderId: jest.fn(),
+    } as any;
+
+    customerRepository = {
+      findById: jest.fn(),
+      findByPhone: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
     handler = new CustomerOrdersHandler(
       evolutionApi,
       {} as any,
       menuItemRepository,
       restaurantRepository,
+      orderItemRepository,
+      customerRepository,
       createOrder,
       notificationService,
       orderState,

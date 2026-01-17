@@ -21,8 +21,10 @@ import { OrderItem } from '../../domain/entities/OrderItem';
 import { MenuItem } from '../../domain/entities/MenuItem';
 import { Restaurant } from '../../domain/entities/Restaurant';
 import { metricsService } from '../../application/services/MetricsService';
+import { MessageFormatter } from '../../application/services/MessageFormatter';
 import { OnboardingData, OnboardingState } from '../../application/services/ConversationStateService';
 import { createAsaasWebhookConfig } from '../../shared/utils/asaasWebhook';
+import { getLocalDateStart, getTimezoneOrDefault } from '../../shared/utils/timezone';
 
 export interface McpDependencies {
   restaurantRepository: IRestaurantRepository;
@@ -80,6 +82,8 @@ async function formatOrder(
     customer_id: order.getCustomerId(),
     status: OrderStateMachine.toMcpStatus(order.getStatus()),
     total: order.getTotal().getValue(),
+    daily_sequence: order.getDailySequence(),
+    sequence_date: order.getSequenceDate()?.toISOString(),
     payment_method: order.getPaymentMethod(),
     payment_link: order.getPaymentLink(),
     payment_id: order.getPaymentId(),
@@ -102,6 +106,13 @@ async function recalculateTotal(
     total = total.add(item.getSubtotal());
   }
   return total;
+}
+
+async function assertOrderHasItems(deps: McpDependencies, orderId: string): Promise<void> {
+  const items = await deps.orderItemRepository.findByOrderId(orderId);
+  if (items.length === 0) {
+    throw new Error('Order has no items');
+  }
 }
 
 function parseOnboardingState(state: string): OnboardingState {
@@ -150,6 +161,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
             payment_account_id: existing.getPaymentAccountId(),
             payment_wallet_id: existing.getPaymentWalletId(),
             allow_kitchen_before_payment: existing.getAllowKitchenNotifyBeforePayment(),
+            timezone: existing.getTimezone(),
+            opening_hours: existing.getOpeningHours(),
           },
           created: false,
         };
@@ -173,6 +186,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         birthDate: params.birth_date,
         incomeValue: params.income_value,
         allowKitchenNotifyBeforePayment: params.allow_kitchen_before_payment,
+        timezone: params.timezone,
+        openingHours: params.opening_hours,
         isActive: true,
       });
 
@@ -195,6 +210,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           birth_date: saved.getBirthDate(),
           income_value: saved.getIncomeValue(),
           allow_kitchen_before_payment: saved.getAllowKitchenNotifyBeforePayment(),
+          timezone: saved.getTimezone(),
+          opening_hours: saved.getOpeningHours(),
         },
         created: true,
       };
@@ -221,6 +238,10 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         city: params.city,
         state: params.state,
       });
+      restaurant.updateOperatingHours({
+        timezone: params.timezone,
+        openingHours: params.opening_hours,
+      });
 
       const saved = await deps.restaurantRepository.save(restaurant);
       return {
@@ -244,6 +265,29 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           province: saved.getProvince(),
           city: saved.getCity(),
           state: saved.getState(),
+          timezone: saved.getTimezone(),
+          opening_hours: saved.getOpeningHours(),
+        },
+      };
+    },
+
+    async update_restaurant_hours(params) {
+      const restaurant = await deps.restaurantRepository.findById(params.restaurant_id);
+      if (!restaurant) throw new Error('Restaurant not found');
+
+      restaurant.updateOperatingHours({
+        timezone: params.timezone,
+        openingHours: params.opening_hours,
+      });
+      const saved = await deps.restaurantRepository.save(restaurant);
+
+      return {
+        restaurant: {
+          id: saved.getId(),
+          name: saved.getName(),
+          phone: saved.getPhone().getValue(),
+          timezone: saved.getTimezone(),
+          opening_hours: saved.getOpeningHours(),
         },
       };
     },
@@ -408,6 +452,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           birth_date: restaurant.getBirthDate(),
           income_value: restaurant.getIncomeValue(),
           allow_kitchen_before_payment: restaurant.getAllowKitchenNotifyBeforePayment(),
+          timezone: restaurant.getTimezone(),
+          opening_hours: restaurant.getOpeningHours(),
         },
       };
     },
@@ -434,6 +480,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           birth_date: restaurant.getBirthDate(),
           income_value: restaurant.getIncomeValue(),
           allow_kitchen_before_payment: restaurant.getAllowKitchenNotifyBeforePayment(),
+          timezone: restaurant.getTimezone(),
+          opening_hours: restaurant.getOpeningHours(),
         },
       };
     },
@@ -489,6 +537,14 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
 
       const total = await recalculateTotal(deps, order.getId());
       order.updateTotal(total);
+      if (order.getStatus() === OrderStatus.DRAFT) {
+        const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
+        if (!restaurant) throw new Error('Restaurant not found');
+        order.setSequenceDate(
+          getLocalDateStart(new Date(), getTimezoneOrDefault(restaurant.getTimezone()))
+        );
+        order.updateStatus(OrderStatus.NEW);
+      }
       await deps.orderRepository.save(order);
 
       return await formatOrder(deps, order.getId());
@@ -505,8 +561,13 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         await deps.orderItemRepository.delete(existing.getId());
       }
 
+      const remainingItems = await deps.orderItemRepository.findByOrderId(order.getId());
       const total = await recalculateTotal(deps, order.getId());
       order.updateTotal(total);
+      if (remainingItems.length === 0 && order.getStatus() === OrderStatus.NEW) {
+        order.updateStatus(OrderStatus.DRAFT);
+        order.clearSequence();
+      }
       await deps.orderRepository.save(order);
 
       return await formatOrder(deps, order.getId());
@@ -561,12 +622,18 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           status: OrderStateMachine.toMcpStatus(order.getStatus()),
           total: order.getTotal().getValue(),
           customer_id: order.getCustomerId(),
+          daily_sequence: order.getDailySequence(),
+          sequence_date: order.getSequenceDate()?.toISOString(),
         });
       }
       return { orders: result };
     },
 
     async kitchen_queue(params) {
+      const newOrders = await deps.orderRepository.findByRestaurantAndStatus(
+        params.restaurant_id,
+        OrderStatus.NEW
+      );
       const preparingOrders = await deps.orderRepository.findByRestaurantAndStatus(
         params.restaurant_id,
         OrderStatus.PREPARING
@@ -577,6 +644,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
       );
 
       const queue = OrderStateMachine.buildKitchenQueue(
+        newOrders,
         preparingOrders,
         readyOrders,
         params.ready_limit ?? 5
@@ -588,6 +656,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           short_id: order.getId().slice(0, 8),
           status: OrderStateMachine.toMcpStatus(order.getStatus()),
           total: order.getTotal().getValue(),
+          daily_sequence: order.getDailySequence(),
+          sequence_date: order.getSequenceDate()?.toISOString(),
           created_at: order.getCreatedAt().toISOString(),
         })),
       };
@@ -641,6 +711,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
       OrderStateMachine.assertCanRequestPayment(order.getStatus());
+      await assertOrderHasItems(deps, order.getId());
 
       if (!deps.paymentService) throw new Error('Payment service not configured');
 
@@ -648,6 +719,9 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
       if (!restaurant) throw new Error('Restaurant not found');
       if (!restaurant.getPaymentWalletId()) {
         throw new Error('Restaurant payment wallet not configured');
+      }
+      if (!restaurant.isOpenAt(new Date())) {
+        throw new Error('Restaurant is closed');
       }
 
       const customer = await deps.customerRepository.findById(order.getCustomerId());
@@ -665,7 +739,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         customerName: customer?.getName(),
         customerPhone: customer?.getPhone().getValue(),
         customerCpfCnpj: params.customer_cpf_cnpj,
-        description: `Pedido ${order.getId().slice(0, 8)}`,
+        description: `Pedido ${MessageFormatter.formatOrderNumber(order)}`,
         splitConfig: {
           restaurantWalletId: restaurant.getPaymentWalletId() as string,
           platformFee,
@@ -711,6 +785,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
     async notify_kitchen(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
+      await assertOrderHasItems(deps, order.getId());
       const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
       if (!restaurant) throw new Error('Restaurant not found');
       OrderStateMachine.assertCanNotifyKitchen(
@@ -728,6 +803,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
     async mark_order_preparing(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
+      await assertOrderHasItems(deps, order.getId());
       const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
       if (!restaurant) throw new Error('Restaurant not found');
       OrderStateMachine.assertCanMarkPreparing(
@@ -747,6 +823,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
     async mark_order_ready(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
+      await assertOrderHasItems(deps, order.getId());
       OrderStateMachine.assertCanMarkReady(order.getStatus());
 
       order.updateStatus(OrderStatus.READY);

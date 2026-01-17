@@ -2,8 +2,10 @@ import { Intent } from '../../domain/enums/Intent';
 import { MessageData } from '../services/OrchestrationService';
 import { EvolutionApiService } from '../../infrastructure/messaging/EvolutionApiService';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
+import { IOrderItemRepository } from '../../domain/repositories/IOrderItemRepository';
 import { IMenuItemRepository } from '../../domain/repositories/IMenuItemRepository';
 import { IRestaurantRepository } from '../../domain/repositories/IRestaurantRepository';
+import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { OrderCreationState } from '../services/OrderStateService';
 import { IOrderStateService } from '../../domain/services/IOrderStateService';
@@ -12,6 +14,8 @@ import { CreateOrder } from '../../domain/usecases/CreateOrder';
 import { NotificationService } from '../services/NotificationService';
 import { MessageFormatter } from '../services/MessageFormatter';
 import { MenuItem } from '../../domain/entities/MenuItem';
+import { Customer } from '../../domain/entities/Customer';
+import { Phone } from '../../domain/value-objects/Phone';
 import { logger } from '../../shared/utils/logger';
 
 export class CustomerOrdersHandler {
@@ -20,6 +24,8 @@ export class CustomerOrdersHandler {
     private readonly orderRepository: IOrderRepository,
     private readonly menuItemRepository: IMenuItemRepository,
     private readonly restaurantRepository: IRestaurantRepository,
+    private readonly orderItemRepository: IOrderItemRepository,
+    private readonly customerRepository: ICustomerRepository,
     private readonly createOrder: CreateOrder,
     private readonly notificationService: NotificationService,
     private readonly orderState: IOrderStateService,
@@ -137,13 +143,7 @@ export class CustomerOrdersHandler {
   }
 
   private async handleCreateOrder(data: MessageData): Promise<void> {
-    if (!data.customerId) {
-      await this.evolutionApi.sendMessage({
-        to: data.from,
-        text: '❌ Erro: Cliente não identificado. Por favor, cadastre-se primeiro.',
-      });
-      return;
-    }
+    await this.ensureCustomerId(data);
 
     try {
       // Inicia processo de criação de pedido
@@ -178,13 +178,7 @@ export class CustomerOrdersHandler {
   }
 
   private async handleCreateOrderFromQRCode(data: MessageData): Promise<void> {
-    if (!data.customerId) {
-      await this.evolutionApi.sendMessage({
-        to: data.from,
-        text: '❌ Erro: Cliente não identificado. Por favor, cadastre-se primeiro.',
-      });
-      return;
-    }
+    await this.ensureCustomerId(data);
 
     try {
       // Extrai restaurantId da mensagem (formato: "pedido:abc123" ou "restaurant:abc123")
@@ -491,13 +485,25 @@ export class CustomerOrdersHandler {
     }
 
     try {
+      const restaurant = await this.restaurantRepository.findById(orderData.restaurantId);
+      if (!restaurant) {
+        throw new Error('Restaurant not found');
+      }
+      if (!restaurant.isOpenAt(new Date())) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '⏰ O restaurante está fechado no momento. Tente novamente no horário de funcionamento.',
+        });
+        return;
+      }
+
       await this.orderState.updateState(data.from, OrderCreationState.CONFIRMING_ORDER);
 
       // Idempotência: gera chave única baseada em cliente + restaurante + hash dos itens
       const itemsHash = JSON.stringify(orderData.items.map(i => ({ id: i.menuItemId, qty: i.quantity })));
       const idempotencyKey = `${data.customerId}:${orderData.restaurantId}:${Buffer.from(itemsHash).toString('base64').slice(0, 16)}`;
 
-      // Cria pedido com status DRAFT (não PAID)
+      // Cria pedido com status NEW (não PAID)
       const order = await this.createOrder.execute({
         restaurantId: orderData.restaurantId,
         customerId: data.customerId,
@@ -505,7 +511,7 @@ export class CustomerOrdersHandler {
           menuItemId: item.menuItemId,
           quantity: item.quantity,
         })),
-        status: OrderStatus.DRAFT,
+        status: OrderStatus.NEW,
         idempotencyKey,
       });
 
@@ -568,6 +574,15 @@ Digite:
         throw new Error('Order not found');
       }
 
+      const orderItems = await this.orderItemRepository.findByOrderId(orderId);
+      if (orderItems.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Seu pedido está sem itens. Adicione itens antes de pagar.',
+        });
+        return;
+      }
+
       // Idempotência: verifica se já tem pagamento gerado
       if (order.getPaymentLink() || order.getPaymentMethod()) {
         const paymentLink = order.getPaymentLink() || 'Link já foi gerado anteriormente';
@@ -594,6 +609,14 @@ Digite:
         throw new Error('Restaurant not found');
       }
 
+      if (!restaurant.isOpenAt(new Date())) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '⏰ O restaurante está fechado no momento. Tente novamente no horário de funcionamento.',
+        });
+        return;
+      }
+
       // Verifica se restaurante tem walletId configurado para split
       const restaurantWalletId = restaurant.getPaymentWalletId();
       if (!restaurantWalletId) {
@@ -618,12 +641,13 @@ Digite:
       }
 
       // Gera link de pagamento (idempotente internamente)
+      const orderNumber = MessageFormatter.formatOrderNumber(order);
       const paymentResponse = await this.paymentService.createPayment({
         orderId: order.getId(),
         amount: totalInCents,
         method: method === 'pix' ? 'pix' : 'card',
         customerId: order.getCustomerId(),
-        description: `Pedido #${order.getId().slice(0, 8)}`,
+        description: `Pedido #${orderNumber}`,
         splitConfig: {
           restaurantWalletId,
           restaurantAmount,
@@ -760,7 +784,8 @@ Digite:
       const statusList = activeOrders
         .map((order) => {
           const statusMap: Record<OrderStatus, string> = {
-            [OrderStatus.DRAFT]: '📝 Rascunho',
+            [OrderStatus.DRAFT]: '🛠️ Montando',
+            [OrderStatus.NEW]: '🆕 Novo',
             [OrderStatus.AWAITING_PAYMENT]: '⏳ Aguardando pagamento',
             [OrderStatus.PAID]: '💳 Pago',
             [OrderStatus.PREPARING]: '👨‍🍳 Em preparo',
@@ -770,7 +795,8 @@ Digite:
             [OrderStatus.PENDING]: '⏳ Pendente', // Mantido para compatibilidade
           };
 
-          return `Pedido #${order.getId().slice(0, 8)}: ${statusMap[order.getStatus()]} - ${order.getTotal().getFormatted()}`;
+          const orderNumber = MessageFormatter.formatOrderNumber(order);
+          return `Pedido #${orderNumber}: ${statusMap[order.getStatus()]} - ${order.getTotal().getFormatted()}`;
         })
         .join('\n');
 
@@ -805,19 +831,20 @@ Digite:
       if (cancellableOrders.length === 0) {
         await this.evolutionApi.sendMessage({
           to: data.from,
-          text: '✅ Você não possui pedidos que podem ser cancelados.\n\nApenas pedidos em rascunho (draft) ou aguardando pagamento podem ser cancelados.',
+          text: '✅ Você não possui pedidos que podem ser cancelados.\n\nApenas pedidos em montagem, novos ou aguardando pagamento podem ser cancelados.',
         });
         return;
       }
 
       // Cancela o primeiro pedido cancelável
       const order = cancellableOrders[0];
+      const orderNumber = MessageFormatter.formatOrderNumber(order);
       
       // Idempotência: verifica se já está cancelado antes de cancelar
       if (order.getStatus() === OrderStatus.CANCELLED) {
         await this.evolutionApi.sendMessage({
           to: data.from,
-          text: `ℹ️ Pedido #${order.getId().slice(0, 8)} já está cancelado.`,
+          text: `ℹ️ Pedido #${orderNumber} já está cancelado.`,
         });
         return;
       }
@@ -830,7 +857,7 @@ Digite:
 
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `✅ Pedido #${order.getId().slice(0, 8)} cancelado com sucesso!`,
+        text: `✅ Pedido #${orderNumber} cancelado com sucesso!`,
       });
     } catch (error: any) {
       logger.error('Error canceling order', { error: error.message });
@@ -842,6 +869,7 @@ Digite:
   }
 
   private async handleDirectOrderFromQRCode(data: MessageData): Promise<void> {
+    await this.ensureCustomerId(data);
     if (!data.customerId || !data.restaurantId || !data.intentResult?.items) {
       return;
     }
@@ -1071,26 +1099,40 @@ Digite:
     data: MessageData,
     orderItems: Array<{ menuItemId: string; quantity: number }>
   ): Promise<void> {
+    await this.ensureCustomerId(data);
     if (!data.customerId || !data.restaurantId) {
       return;
     }
 
     try {
+      const restaurant = await this.restaurantRepository.findById(data.restaurantId);
+      if (!restaurant) {
+        throw new Error('Restaurant not found');
+      }
+      if (!restaurant.isOpenAt(new Date())) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '⏰ O restaurante está fechado no momento. Tente novamente no horário de funcionamento.',
+        });
+        return;
+      }
+
       // Cria pedido diretamente
       const order = await this.createOrder.execute({
         restaurantId: data.restaurantId,
         customerId: data.customerId,
         items: orderItems,
+        status: OrderStatus.NEW,
       });
 
       // Notifica restaurante
       await this.notificationService.notifyOrderCreated(order);
 
       // Confirma para cliente
-      const orderId = order.getId().slice(0, 8);
+      const orderId = MessageFormatter.formatOrderNumber(order);
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `✅ Pedido criado com sucesso!\n\nPedido #${orderId}\nTotal: ${order.getTotal().getFormatted()}\nStatus: ⏳ Pendente\n\nAguarde confirmação do restaurante.`,
+        text: `✅ Pedido criado com sucesso!\n\nPedido #${orderId}\nTotal: ${order.getTotal().getFormatted()}\nStatus: 🆕 Novo\n\nAguarde confirmação do restaurante.`,
       });
 
       // Limpa estado
@@ -1099,5 +1141,22 @@ Digite:
       logger.error('Error creating order from items', { error: error.message });
       throw error;
     }
+  }
+
+  private async ensureCustomerId(data: MessageData): Promise<void> {
+    if (data.customerId) {
+      return;
+    }
+
+    const phone = Phone.create(data.from);
+    const existing = await this.customerRepository.findByPhone(phone);
+    if (existing) {
+      data.customerId = existing.getId();
+      return;
+    }
+
+    const created = Customer.create({ phone });
+    const saved = await this.customerRepository.save(created);
+    data.customerId = saved.getId();
   }
 }

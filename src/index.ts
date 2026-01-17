@@ -81,6 +81,7 @@ async function main() {
       orderRepository,
       menuItemRepository,
       orderItemRepository,
+      restaurantRepository,
       notificationService,
       updateMenuItem,
       createMenuItem
@@ -90,6 +91,8 @@ async function main() {
       orderRepository,
       menuItemRepository,
       restaurantRepository,
+      orderItemRepository,
+      customerRepository,
       createOrder,
       notificationService,
       orderStateService,

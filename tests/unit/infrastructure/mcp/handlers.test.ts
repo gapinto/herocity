@@ -94,7 +94,7 @@ describe('MCP handlers', () => {
     });
 
     expect(result.order_id).toBe(order.getId());
-    expect(result.status).toBe('BUILDING');
+    expect(result.status).toBe('MONTANDO');
   });
 
   it('update_restaurant_payment_data stores birth date', async () => {
@@ -170,6 +170,23 @@ describe('MCP handlers', () => {
     delete process.env.ASAAS_WEBHOOK_BASE_URL;
   });
 
+  it('update_restaurant_hours stores timezone and opening hours', async () => {
+    const { deps, restaurant } = makeDeps();
+    const handlers = createMcpHandlers(deps as any);
+    deps.restaurantRepository.findById = jest.fn().mockResolvedValue(restaurant);
+    deps.restaurantRepository.save = jest.fn().mockImplementation((savedRestaurant) => Promise.resolve(savedRestaurant));
+
+    const result = await handlers.update_restaurant_hours({
+      restaurant_id: restaurant.getId(),
+      timezone: 'America/Recife',
+      opening_hours: [{ day: 1, open: '09:00', close: '18:00' }],
+    });
+
+    expect(deps.restaurantRepository.save).toHaveBeenCalled();
+    expect(result.restaurant.timezone).toBe('America/Recife');
+    expect(result.restaurant.opening_hours).toEqual([{ day: 1, open: '09:00', close: '18:00' }]);
+  });
+
   it('kitchen_queue returns preparing then top 5 ready', async () => {
     const { deps } = makeDeps();
     const handlers = createMcpHandlers(deps as any);
@@ -184,6 +201,10 @@ describe('MCP handlers', () => {
         createdAt,
       });
 
+    const newOrders = [
+      makeOrder('new-2', OrderStatus.NEW, new Date('2024-01-02')),
+      makeOrder('new-1', OrderStatus.NEW, new Date('2024-01-01')),
+    ];
     const preparingOrders = [
       makeOrder('prep-2', OrderStatus.PREPARING, new Date('2024-01-02')),
       makeOrder('prep-1', OrderStatus.PREPARING, new Date('2024-01-01')),
@@ -200,6 +221,7 @@ describe('MCP handlers', () => {
     deps.orderRepository.findByRestaurantAndStatus = jest
       .fn()
       .mockImplementation((_, status: OrderStatus) => {
+        if (status === OrderStatus.NEW) return Promise.resolve(newOrders);
         if (status === OrderStatus.PREPARING) return Promise.resolve(preparingOrders);
         if (status === OrderStatus.READY) return Promise.resolve(readyOrders);
         return Promise.resolve([]);
@@ -207,6 +229,8 @@ describe('MCP handlers', () => {
 
     const result = await handlers.kitchen_queue({ restaurant_id: 'rest-1' });
     expect(result.orders.map((item: any) => item.order_id)).toEqual([
+      'new-1',
+      'new-2',
       'prep-1',
       'prep-2',
       'ready-1',
@@ -229,5 +253,25 @@ describe('MCP handlers', () => {
     });
 
     expect(result.order_id).toBe(order.getId());
+  });
+
+  it('request_payment fails when order has no items', async () => {
+    const { deps, order } = makeDeps();
+    const handlers = createMcpHandlers({
+      ...deps,
+      paymentService: {
+        createPayment: jest.fn(),
+        confirmPayment: jest.fn(),
+        getPaymentStatus: jest.fn(),
+        cancelPayment: jest.fn(),
+      },
+    } as any);
+
+    order.updateStatus(OrderStatus.NEW);
+    deps.orderRepository.findById = jest.fn().mockResolvedValue(order);
+
+    await expect(
+      handlers.request_payment({ order_id: order.getId(), method: 'pix' })
+    ).rejects.toThrow('Order has no items');
   });
 });

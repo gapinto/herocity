@@ -4,6 +4,8 @@ import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemR
 import { MenuItem } from '../../../src/domain/entities/MenuItem';
 import { Price } from '../../../src/domain/value-objects/Price';
 import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
+import { IOrderItemRepository } from '../../../src/domain/repositories/IOrderItemRepository';
+import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
 import { IPaymentService } from '../../../src/domain/services/IPaymentService';
 
 describe('CustomerOrdersHandler - Ambiguity Resolution', () => {
@@ -12,6 +14,8 @@ describe('CustomerOrdersHandler - Ambiguity Resolution', () => {
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let orderState: jest.Mocked<IOrderStateService>;
   let paymentService: jest.Mocked<IPaymentService>;
+  let orderItemRepository: jest.Mocked<IOrderItemRepository>;
+  let customerRepository: jest.Mocked<ICustomerRepository>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -58,11 +62,32 @@ describe('CustomerOrdersHandler - Ambiguity Resolution', () => {
       cancelPayment: jest.fn(),
     } as any;
 
+    orderItemRepository = {
+      findByOrderId: jest.fn().mockResolvedValue([]),
+      findById: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      deleteByOrderId: jest.fn(),
+    } as any;
+
+    customerRepository = {
+      findById: jest.fn(),
+      findByPhone: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
+    const restaurantRepository = {
+      findById: jest.fn().mockResolvedValue({ isOpenAt: () => true }),
+    } as any;
+
     handler = new CustomerOrdersHandler(
       evolutionApi,
       {} as any,
       menuItemRepository,
-      {} as any,
+      restaurantRepository,
+      orderItemRepository,
+      customerRepository,
       {} as any,
       notificationService,
       orderState,
