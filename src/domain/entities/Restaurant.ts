@@ -21,6 +21,7 @@ export interface RestaurantProps {
   email?: string; // E-mail para conta
   bankAccount?: BankAccountData; // Dados bancários
   documentUrl?: string; // URL do documento do responsável (upload)
+  birthDate?: string; // Data de nascimento (YYYY-MM-DD)
   paymentAccountId?: string; // ID da subconta criada no provedor (ex: "acct_29384")
   paymentWalletId?: string; // ID da carteira (walletId) para split
   paymentWebhookUrl?: string; // URL do webhook da subconta
@@ -48,6 +49,7 @@ export class Restaurant {
   private email?: string; // E-mail para conta
   private bankAccount?: BankAccountData; // Dados bancários
   private documentUrl?: string; // URL do documento do responsável
+  private birthDate?: string; // Data de nascimento (YYYY-MM-DD)
   private paymentAccountId?: string; // ID da subconta criada no provedor
   private paymentWalletId?: string; // ID da carteira (walletId)
   private paymentWebhookUrl?: string; // URL do webhook da subconta
@@ -73,6 +75,7 @@ export class Restaurant {
     this.email = props.email;
     this.bankAccount = props.bankAccount;
     this.documentUrl = props.documentUrl;
+    this.birthDate = props.birthDate;
     this.paymentAccountId = props.paymentAccountId;
     this.paymentWalletId = props.paymentWalletId;
     this.paymentWebhookUrl = props.paymentWebhookUrl;
@@ -93,11 +96,11 @@ export class Restaurant {
     props: Required<
       Omit<
         RestaurantProps,
-        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
+        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
       >
     > &
       Partial<
-        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
+        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
       >
   ): Restaurant {
     return new Restaurant(props);
@@ -190,6 +193,10 @@ export class Restaurant {
     return this.documentUrl;
   }
 
+  getBirthDate(): string | undefined {
+    return this.birthDate;
+  }
+
   getPaymentAccountId(): string | undefined {
     return this.paymentAccountId;
   }
@@ -229,6 +236,8 @@ export class Restaurant {
       hasAddressData &&
       this.legalName &&
       this.cpfCnpj &&
+      this.birthDate &&
+      this.birthDate.trim().length > 0 &&
       this.email &&
       this.bankAccount &&
       this.bankAccount.bankCode &&
@@ -264,6 +273,7 @@ export class Restaurant {
     email?: string;
     bankAccount?: BankAccountData;
     documentUrl?: string;
+    birthDate?: string;
     paymentAccountId?: string;
     paymentWalletId?: string;
     paymentWebhookUrl?: string;
@@ -281,6 +291,7 @@ export class Restaurant {
     if (data.email !== undefined) this.email = data.email;
     if (data.bankAccount !== undefined) this.bankAccount = data.bankAccount;
     if (data.documentUrl !== undefined) this.documentUrl = data.documentUrl;
+    if (data.birthDate !== undefined) this.birthDate = data.birthDate;
     if (data.paymentAccountId !== undefined) this.paymentAccountId = data.paymentAccountId;
     if (data.paymentWalletId !== undefined) this.paymentWalletId = data.paymentWalletId;
     if (data.paymentWebhookUrl !== undefined) this.paymentWebhookUrl = data.paymentWebhookUrl;

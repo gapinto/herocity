@@ -167,6 +167,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         email: params.email,
         bankAccount: params.bank_account,
         documentUrl: params.document_url,
+        birthDate: params.birth_date,
         isActive: true,
       });
 
@@ -186,6 +187,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           is_active: saved.isActive(),
           payment_account_id: saved.getPaymentAccountId(),
           payment_wallet_id: saved.getPaymentWalletId(),
+          birth_date: saved.getBirthDate(),
         },
         created: true,
       };
@@ -201,6 +203,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         email: params.email,
         bankAccount: params.bank_account,
         documentUrl: params.document_url,
+        birthDate: params.birth_date,
         address: params.address,
         postalCode: params.postal_code,
         addressNumber: params.address_number,
@@ -217,6 +220,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           name: saved.getName(),
           payment_account_id: saved.getPaymentAccountId(),
           payment_wallet_id: saved.getPaymentWalletId(),
+          birth_date: saved.getBirthDate(),
           legal_name: saved.getLegalName(),
           cpf_cnpj: saved.getCpfCnpj(),
           email: saved.getEmail(),
@@ -251,6 +255,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         name: restaurant.getName(),
         bankAccount: restaurant.getBankAccount() as any,
         documentUrl: restaurant.getDocumentUrl(),
+        birthDate: restaurant.getBirthDate(),
         address: restaurant.getAddress(),
         postalCode: restaurant.getPostalCode(),
         addressNumber: restaurant.getAddressNumber(),
@@ -382,6 +387,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           menu_rules: restaurant.getMenuRules(),
           payment_account_id: restaurant.getPaymentAccountId(),
           payment_wallet_id: restaurant.getPaymentWalletId(),
+          birth_date: restaurant.getBirthDate(),
         },
       };
     },
@@ -405,6 +411,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           menu_rules: restaurant.getMenuRules(),
           payment_account_id: restaurant.getPaymentAccountId(),
           payment_wallet_id: restaurant.getPaymentWalletId(),
+          birth_date: restaurant.getBirthDate(),
         },
       };
     },

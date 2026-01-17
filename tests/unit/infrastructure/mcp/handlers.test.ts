@@ -95,4 +95,19 @@ describe('MCP handlers', () => {
     expect(result.order_id).toBe(order.getId());
     expect(result.status).toBe('BUILDING');
   });
+
+  it('update_restaurant_payment_data stores birth date', async () => {
+    const { deps, restaurant } = makeDeps();
+    const handlers = createMcpHandlers(deps as any);
+    deps.restaurantRepository.findById = jest.fn().mockResolvedValue(restaurant);
+    deps.restaurantRepository.save = jest.fn().mockImplementation((savedRestaurant) => Promise.resolve(savedRestaurant));
+
+    const result = await handlers.update_restaurant_payment_data({
+      restaurant_id: restaurant.getId(),
+      birth_date: '1992-05-06',
+    });
+
+    expect(deps.restaurantRepository.save).toHaveBeenCalled();
+    expect(result.restaurant.birth_date).toBe('1992-05-06');
+  });
 });

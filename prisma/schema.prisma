@@ -28,6 +28,7 @@ model Restaurant {
   email            String?  // E-mail para conta
   bankAccount      Json?    // Dados bancários: { bankCode, agency, account, accountType, accountHolderName }
   documentUrl      String?  // URL do documento do responsável (upload)
+  birthDate        String?  // Data de nascimento (YYYY-MM-DD)
   
   // ID da subconta criada no provedor de pagamento (Asaas/Stripe)
   paymentAccountId String?  @unique // ID da subconta (ex: "acct_29384")
