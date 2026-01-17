@@ -116,15 +116,57 @@ describe('AsaasPaymentAccountService', () => {
     });
 
     it('should handle error when creating customer', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({
-          errors: [{ description: 'CPF/CNPJ already registered' }],
-        }),
-      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({
+            errors: [{ description: 'CPF/CNPJ already registered' }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        });
 
       await expect(service.createSubAccount(mockInput)).rejects.toThrow(
         'Failed to create sub-account'
+      );
+    });
+
+    it('should reuse existing account when CPF/CNPJ is already registered', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({
+            errors: [{ description: 'O CPF 12345678000190 já está em uso.' }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              {
+                id: 'acc_existing_123',
+                walletId: 'wallet_existing_123',
+                postalCode: mockInput.postalCode,
+                address: mockInput.address,
+              },
+            ],
+          }),
+        });
+
+      const result = await service.createSubAccount(mockInput);
+
+      expect(result.accountId).toBe('acc_existing_123');
+      expect(result.walletId).toBe('wallet_existing_123');
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        2,
+        `${mockBaseUrl}/accounts?cpfCnpj=12345678000190&limit=1`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'access_token': mockApiKey,
+          }),
+        })
       );
     });
 
@@ -142,6 +184,28 @@ describe('AsaasPaymentAccountService', () => {
       const result = await service.createSubAccount(mockInput);
       expect(result.accountId).toBe('acc_123456789');
       expect(result.walletId).toBe('wallet_123456789');
+    });
+
+    it('should send numeric city when city is numeric string', async () => {
+      const numericCityInput = { ...mockInput, city: '8389' };
+      const mockAccountResponse = {
+        id: 'acc_123456789',
+        walletId: 'wallet_123456789',
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAccountResponse,
+      });
+
+      await service.createSubAccount(numericCityInput);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/accounts`,
+        expect.objectContaining({
+          body: expect.stringContaining('"city":8389'),
+        })
+      );
     });
   });
 

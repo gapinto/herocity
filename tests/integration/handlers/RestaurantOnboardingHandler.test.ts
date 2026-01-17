@@ -284,6 +284,14 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
+      // 15. Regra da cozinha (sim)
+      sendMessageSpy.mockClear();
+      await handler.handle({
+        from: mockFrom,
+        text: 'sim',
+        pushName: mockPushName,
+      } as any);
+
       // Deve criar restaurante e subconta
       expect(prisma.restaurant.upsert).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith(
@@ -413,6 +421,12 @@ describe('RestaurantOnboardingHandler Integration', () => {
       await handler.handle({
         from: mockFrom,
         text: 'pular',
+      } as any);
+
+      // Responde regra da cozinha para finalizar onboarding
+      await handler.handle({
+        from: mockFrom,
+        text: 'sim',
       } as any);
 
       // Deve criar restaurante mesmo com erro na subconta

@@ -31,11 +31,13 @@ export class AsaasPaymentService implements IPaymentService {
 
     try {
       let result: PaymentResponse;
+      const customerId = await this.resolveCustomerId(request);
+      const resolvedRequest = { ...request, customerId };
       
-      if (request.method === 'pix') {
-        result = await this.createPixPayment(request);
+      if (resolvedRequest.method === 'pix') {
+        result = await this.createPixPayment(resolvedRequest);
       } else {
-        result = await this.createCardPayment(request);
+        result = await this.createCardPayment(resolvedRequest);
       }
 
       // Marca como processado
@@ -47,6 +49,100 @@ export class AsaasPaymentService implements IPaymentService {
     } catch (error: any) {
       logger.error('Error creating Asaas payment', { error: error.message, request });
       throw new Error(`Failed to create payment: ${error.message}`);
+    }
+  }
+
+  private async resolveCustomerId(request: PaymentRequest): Promise<string> {
+    if (request.customerId && request.customerId.startsWith('cus_')) {
+      return request.customerId;
+    }
+
+    if (!request.customerPhone) {
+      throw new Error('Customer phone is required for payment');
+    }
+
+    return this.getOrCreateCustomer({
+      name: request.customerName,
+      phone: request.customerPhone,
+      email: request.customerEmail,
+      cpfCnpj: request.customerCpfCnpj,
+    });
+  }
+
+  private async getOrCreateCustomer(input: { name?: string; phone: string; email?: string; cpfCnpj?: string }): Promise<string> {
+    const phone = input.phone.replace(/\D/g, '');
+    const payload: any = {
+      name: input.name?.trim() || `Cliente ${phone}`,
+      phone,
+      mobilePhone: phone,
+      email: input.email,
+      cpfCnpj: input.cpfCnpj,
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined) {
+        delete payload[key];
+      }
+    });
+
+    const response = await fetch(`${this.baseUrl}/customers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'access_token': this.apiKey,
+        'User-Agent': 'HeroCity/1.0',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'Failed to create customer';
+      try {
+        const errorData = await response.json() as any;
+        errorMessage = errorData.errors?.[0]?.description || errorData.message || errorMessage;
+      } catch (parseError) {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+
+      if (this.isDuplicateCustomerError(errorMessage)) {
+        const existing = await this.findCustomerByPhone(phone);
+        if (existing) {
+          return existing.id;
+        }
+      }
+
+      logger.error('Asaas Pix payment request failed', { error: errorMessage, payload });
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json() as any;
+    return data.id;
+  }
+
+  private isDuplicateCustomerError(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return normalized.includes('já está em uso') || normalized.includes('already registered');
+  }
+
+  private async findCustomerByPhone(phone: string): Promise<any | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/customers?phone=${phone}&limit=1`, {
+        headers: {
+          'access_token': this.apiKey,
+          'User-Agent': 'HeroCity/1.0',
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json() as any;
+      const customer = data?.data?.[0];
+      return customer || null;
+    } catch (error: any) {
+      logger.warn('Error fetching Asaas customer by phone', { error: error.message, phone });
+      return null;
     }
   }
 
@@ -62,12 +158,8 @@ export class AsaasPaymentService implements IPaymentService {
     if (request.splitConfig) {
       payload.split = [
         {
-          walletId: this.platformWalletId,
-          fixedValue: request.splitConfig.platformFee / 100,
-        },
-        {
           walletId: request.splitConfig.restaurantWalletId,
-          totalValue: request.splitConfig.restaurantAmount / 100,
+          fixedValue: request.splitConfig.restaurantAmount / 100,
         },
       ];
     }
@@ -86,8 +178,16 @@ export class AsaasPaymentService implements IPaymentService {
     });
 
     if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(error.message || 'Failed to create Pix payment');
+      let errorMessage = 'Failed to create Pix payment';
+      const errorBody = await response.text();
+      try {
+        const error = JSON.parse(errorBody) as any;
+        errorMessage = error.errors?.[0]?.description || error.message || errorMessage;
+      } catch (parseError) {
+        errorMessage = errorBody || `HTTP ${response.status}: ${response.statusText}`;
+      }
+      logger.error('Asaas card payment request failed', { error: errorMessage, payload });
+      throw new Error(errorMessage);
     }
 
     const data = await response.json() as any;
@@ -129,12 +229,8 @@ export class AsaasPaymentService implements IPaymentService {
     if (request.splitConfig) {
       payload.split = [
         {
-          walletId: this.platformWalletId,
-          fixedValue: request.splitConfig.platformFee / 100,
-        },
-        {
           walletId: request.splitConfig.restaurantWalletId,
-          totalValue: request.splitConfig.restaurantAmount / 100,
+          fixedValue: request.splitConfig.restaurantAmount / 100,
         },
       ];
     }
@@ -153,8 +249,15 @@ export class AsaasPaymentService implements IPaymentService {
     });
 
     if (!response.ok) {
-      const error = await response.json() as any;
-      throw new Error(error.message || 'Failed to create card payment');
+      let errorMessage = 'Failed to create card payment';
+      const errorBody = await response.text();
+      try {
+        const error = JSON.parse(errorBody) as any;
+        errorMessage = error.errors?.[0]?.description || error.message || errorMessage;
+      } catch (parseError) {
+        errorMessage = errorBody || `HTTP ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json() as any;

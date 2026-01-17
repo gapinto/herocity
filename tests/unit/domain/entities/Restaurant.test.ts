@@ -106,6 +106,7 @@ describe('Restaurant', () => {
       legalName: 'Teste LTDA',
       cpfCnpj: '12345678000190',
       birthDate: '1992-05-06',
+      incomeValue: 25000,
       email: 'contato@restaurante.com.br',
       bankAccount: {
         bankCode: '001',
@@ -133,5 +134,17 @@ describe('Restaurant', () => {
     restaurant.updatePaymentData({ birthDate: '1992-05-06' });
 
     expect(restaurant.getBirthDate()).toBe('1992-05-06');
+  });
+
+  it('should update income value on payment data', () => {
+    const restaurant = Restaurant.create({
+      name: 'Test Restaurant',
+      phone: Phone.create('81999999999'),
+      ...baseAddress,
+    });
+
+    restaurant.updatePaymentData({ incomeValue: 25000 });
+
+    expect(restaurant.getIncomeValue()).toBe(25000);
   });
 });

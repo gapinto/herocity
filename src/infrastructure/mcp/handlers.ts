@@ -123,6 +123,8 @@ function parseOnboardingState(state: string): OnboardingState {
       return OnboardingState.WAITING_BANK_ACCOUNT;
     case 'WAITING_DOCUMENT':
       return OnboardingState.WAITING_DOCUMENT;
+    case 'WAITING_KITCHEN_RULE':
+      return OnboardingState.WAITING_KITCHEN_RULE;
     case 'CREATING_PAYMENT_ACCOUNT':
       return OnboardingState.CREATING_PAYMENT_ACCOUNT;
     case 'COMPLETED':
@@ -147,6 +149,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
             is_active: existing.isActive(),
             payment_account_id: existing.getPaymentAccountId(),
             payment_wallet_id: existing.getPaymentWalletId(),
+            allow_kitchen_before_payment: existing.getAllowKitchenNotifyBeforePayment(),
           },
           created: false,
         };
@@ -168,6 +171,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         bankAccount: params.bank_account,
         documentUrl: params.document_url,
         birthDate: params.birth_date,
+        incomeValue: params.income_value,
+        allowKitchenNotifyBeforePayment: params.allow_kitchen_before_payment,
         isActive: true,
       });
 
@@ -188,6 +193,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           payment_account_id: saved.getPaymentAccountId(),
           payment_wallet_id: saved.getPaymentWalletId(),
           birth_date: saved.getBirthDate(),
+          income_value: saved.getIncomeValue(),
+          allow_kitchen_before_payment: saved.getAllowKitchenNotifyBeforePayment(),
         },
         created: true,
       };
@@ -204,6 +211,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         bankAccount: params.bank_account,
         documentUrl: params.document_url,
         birthDate: params.birth_date,
+        incomeValue: params.income_value,
+        allowKitchenNotifyBeforePayment: params.allow_kitchen_before_payment,
         address: params.address,
         postalCode: params.postal_code,
         addressNumber: params.address_number,
@@ -221,6 +230,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           payment_account_id: saved.getPaymentAccountId(),
           payment_wallet_id: saved.getPaymentWalletId(),
           birth_date: saved.getBirthDate(),
+          income_value: saved.getIncomeValue(),
+          allow_kitchen_before_payment: saved.getAllowKitchenNotifyBeforePayment(),
           legal_name: saved.getLegalName(),
           cpf_cnpj: saved.getCpfCnpj(),
           email: saved.getEmail(),
@@ -256,6 +267,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         bankAccount: restaurant.getBankAccount() as any,
         documentUrl: restaurant.getDocumentUrl(),
         birthDate: restaurant.getBirthDate(),
+        incomeValue: restaurant.getIncomeValue(),
         address: restaurant.getAddress(),
         postalCode: restaurant.getPostalCode(),
         addressNumber: restaurant.getAddressNumber(),
@@ -274,11 +286,17 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
       restaurant.setPaymentWebhookConfig(webhookConfig.url, webhookConfig.authToken);
       await deps.restaurantRepository.save(restaurant);
 
+      const activationRequired = result.status === 'pending';
+
       return {
         restaurant_id: restaurant.getId(),
         payment_account_id: result.accountId,
         payment_wallet_id: result.walletId,
         status: result.status,
+        activation_required: activationRequired,
+        activation_message: activationRequired
+          ? 'Para liberar o PIX, finalize a ativação com a chave recebida no celular pelo Asaas.'
+          : undefined,
       };
     },
 
@@ -388,6 +406,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           payment_account_id: restaurant.getPaymentAccountId(),
           payment_wallet_id: restaurant.getPaymentWalletId(),
           birth_date: restaurant.getBirthDate(),
+          income_value: restaurant.getIncomeValue(),
+          allow_kitchen_before_payment: restaurant.getAllowKitchenNotifyBeforePayment(),
         },
       };
     },
@@ -412,6 +432,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           payment_account_id: restaurant.getPaymentAccountId(),
           payment_wallet_id: restaurant.getPaymentWalletId(),
           birth_date: restaurant.getBirthDate(),
+          income_value: restaurant.getIncomeValue(),
+          allow_kitchen_before_payment: restaurant.getAllowKitchenNotifyBeforePayment(),
         },
       };
     },
@@ -544,6 +566,65 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
       return { orders: result };
     },
 
+    async kitchen_queue(params) {
+      const preparingOrders = await deps.orderRepository.findByRestaurantAndStatus(
+        params.restaurant_id,
+        OrderStatus.PREPARING
+      );
+      const readyOrders = await deps.orderRepository.findByRestaurantAndStatus(
+        params.restaurant_id,
+        OrderStatus.READY
+      );
+
+      const queue = OrderStateMachine.buildKitchenQueue(
+        preparingOrders,
+        readyOrders,
+        params.ready_limit ?? 5
+      );
+
+      return {
+        orders: queue.map((order) => ({
+          order_id: order.getId(),
+          short_id: order.getId().slice(0, 8),
+          status: OrderStateMachine.toMcpStatus(order.getStatus()),
+          total: order.getTotal().getValue(),
+          created_at: order.getCreatedAt().toISOString(),
+        })),
+      };
+    },
+
+    async kitchen_order_details(params) {
+      const restaurantId = params.restaurant_id;
+      const orderId = params.order_id;
+      const orderShortId = params.order_short_id;
+
+      if (!restaurantId) {
+        throw new Error('Restaurant not found');
+      }
+
+      let order = null;
+      if (orderId) {
+        order = await deps.orderRepository.findById(orderId);
+      } else if (orderShortId) {
+        const orders = await deps.orderRepository.findByRestaurantId(restaurantId);
+        const matches = orders.filter((item) =>
+          item.getId().toLowerCase().startsWith(String(orderShortId).toLowerCase())
+        );
+        if (matches.length > 1) {
+          throw new Error('Multiple orders found for provided short id');
+        }
+        order = matches[0] || null;
+      } else {
+        throw new Error('Order id not provided');
+      }
+
+      if (!order || order.getRestaurantId() !== restaurantId) {
+        throw new Error('Order not found');
+      }
+
+      return await formatOrder(deps, order.getId());
+    },
+
     async cancel_order(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
@@ -583,6 +664,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         customerId: order.getCustomerId(),
         customerName: customer?.getName(),
         customerPhone: customer?.getPhone().getValue(),
+        customerCpfCnpj: params.customer_cpf_cnpj,
         description: `Pedido ${order.getId().slice(0, 8)}`,
         splitConfig: {
           restaurantWalletId: restaurant.getPaymentWalletId() as string,
@@ -629,7 +711,12 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
     async notify_kitchen(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
-      OrderStateMachine.assertCanNotifyKitchen(order.getStatus());
+      const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
+      if (!restaurant) throw new Error('Restaurant not found');
+      OrderStateMachine.assertCanNotifyKitchen(
+        order.getStatus(),
+        restaurant.getAllowKitchenNotifyBeforePayment()
+      );
 
       if (deps.notificationService) {
         await deps.notificationService.notifyOrderCreated(order);
@@ -641,7 +728,12 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
     async mark_order_preparing(params) {
       const order = await deps.orderRepository.findById(params.order_id);
       if (!order) throw new Error('Order not found');
-      OrderStateMachine.assertCanMarkPreparing(order.getStatus());
+      const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
+      if (!restaurant) throw new Error('Restaurant not found');
+      OrderStateMachine.assertCanMarkPreparing(
+        order.getStatus(),
+        restaurant.getAllowKitchenNotifyBeforePayment()
+      );
 
       order.updateStatus(OrderStatus.PREPARING);
       await deps.orderRepository.save(order);

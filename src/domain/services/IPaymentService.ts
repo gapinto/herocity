@@ -15,6 +15,7 @@ export interface PaymentRequest {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerCpfCnpj?: string;
   description?: string;
   splitConfig?: SplitConfig;
 }

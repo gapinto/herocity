@@ -80,6 +80,7 @@ async function main() {
       evolutionApi,
       orderRepository,
       menuItemRepository,
+      orderItemRepository,
       notificationService,
       updateMenuItem,
       createMenuItem

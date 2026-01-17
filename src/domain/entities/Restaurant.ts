@@ -22,6 +22,8 @@ export interface RestaurantProps {
   bankAccount?: BankAccountData; // Dados bancários
   documentUrl?: string; // URL do documento do responsável (upload)
   birthDate?: string; // Data de nascimento (YYYY-MM-DD)
+  incomeValue?: number; // Renda/faturamento mensal
+  allowKitchenNotifyBeforePayment?: boolean; // Permite notificar cozinha antes do pagamento
   paymentAccountId?: string; // ID da subconta criada no provedor (ex: "acct_29384")
   paymentWalletId?: string; // ID da carteira (walletId) para split
   paymentWebhookUrl?: string; // URL do webhook da subconta
@@ -50,6 +52,8 @@ export class Restaurant {
   private bankAccount?: BankAccountData; // Dados bancários
   private documentUrl?: string; // URL do documento do responsável
   private birthDate?: string; // Data de nascimento (YYYY-MM-DD)
+  private incomeValue?: number; // Renda/faturamento mensal
+  private allowKitchenNotifyBeforePayment?: boolean; // Permite notificar cozinha antes do pagamento
   private paymentAccountId?: string; // ID da subconta criada no provedor
   private paymentWalletId?: string; // ID da carteira (walletId)
   private paymentWebhookUrl?: string; // URL do webhook da subconta
@@ -76,6 +80,8 @@ export class Restaurant {
     this.bankAccount = props.bankAccount;
     this.documentUrl = props.documentUrl;
     this.birthDate = props.birthDate;
+    this.incomeValue = props.incomeValue;
+    this.allowKitchenNotifyBeforePayment = props.allowKitchenNotifyBeforePayment ?? false;
     this.paymentAccountId = props.paymentAccountId;
     this.paymentWalletId = props.paymentWalletId;
     this.paymentWebhookUrl = props.paymentWebhookUrl;
@@ -96,11 +102,11 @@ export class Restaurant {
     props: Required<
       Omit<
         RestaurantProps,
-        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
+        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'incomeValue' | 'allowKitchenNotifyBeforePayment' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
       >
     > &
       Partial<
-        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
+        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'birthDate' | 'incomeValue' | 'allowKitchenNotifyBeforePayment' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
       >
   ): Restaurant {
     return new Restaurant(props);
@@ -197,6 +203,14 @@ export class Restaurant {
     return this.birthDate;
   }
 
+  getIncomeValue(): number | undefined {
+    return this.incomeValue;
+  }
+
+  getAllowKitchenNotifyBeforePayment(): boolean {
+    return !!this.allowKitchenNotifyBeforePayment;
+  }
+
   getPaymentAccountId(): string | undefined {
     return this.paymentAccountId;
   }
@@ -238,6 +252,8 @@ export class Restaurant {
       this.cpfCnpj &&
       this.birthDate &&
       this.birthDate.trim().length > 0 &&
+      typeof this.incomeValue === 'number' &&
+      this.incomeValue > 0 &&
       this.email &&
       this.bankAccount &&
       this.bankAccount.bankCode &&
@@ -274,6 +290,8 @@ export class Restaurant {
     bankAccount?: BankAccountData;
     documentUrl?: string;
     birthDate?: string;
+    incomeValue?: number;
+    allowKitchenNotifyBeforePayment?: boolean;
     paymentAccountId?: string;
     paymentWalletId?: string;
     paymentWebhookUrl?: string;
@@ -292,6 +310,10 @@ export class Restaurant {
     if (data.bankAccount !== undefined) this.bankAccount = data.bankAccount;
     if (data.documentUrl !== undefined) this.documentUrl = data.documentUrl;
     if (data.birthDate !== undefined) this.birthDate = data.birthDate;
+    if (data.incomeValue !== undefined) this.incomeValue = data.incomeValue;
+    if (data.allowKitchenNotifyBeforePayment !== undefined) {
+      this.allowKitchenNotifyBeforePayment = data.allowKitchenNotifyBeforePayment;
+    }
     if (data.paymentAccountId !== undefined) this.paymentAccountId = data.paymentAccountId;
     if (data.paymentWalletId !== undefined) this.paymentWalletId = data.paymentWalletId;
     if (data.paymentWebhookUrl !== undefined) this.paymentWebhookUrl = data.paymentWebhookUrl;

@@ -3,11 +3,13 @@ import { MessageData } from '../services/OrchestrationService';
 import { EvolutionApiService } from '../../infrastructure/messaging/EvolutionApiService';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IMenuItemRepository } from '../../domain/repositories/IMenuItemRepository';
+import { IOrderItemRepository } from '../../domain/repositories/IOrderItemRepository';
 import { OrderStatus } from '../../domain/enums/OrderStatus';
 import { NotificationService } from '../services/NotificationService';
 import { UpdateMenuItem } from '../../domain/usecases/UpdateMenuItem';
 import { CreateMenuItem } from '../../domain/usecases/CreateMenuItem';
 import { MessageFormatter } from '../services/MessageFormatter';
+import { OrderStateMachine } from '../../domain/state/OrderStateMachine';
 import { logger } from '../../shared/utils/logger';
 
 export class RestaurantManagementHandler {
@@ -15,6 +17,7 @@ export class RestaurantManagementHandler {
     private readonly evolutionApi: EvolutionApiService,
     private readonly orderRepository: IOrderRepository,
     private readonly menuItemRepository: IMenuItemRepository,
+    private readonly orderItemRepository: IOrderItemRepository,
     private readonly notificationService: NotificationService,
     private readonly updateMenuItem: UpdateMenuItem,
     private readonly createMenuItem: CreateMenuItem
@@ -34,6 +37,12 @@ export class RestaurantManagementHandler {
           break;
         case Intent.CONSULTAR_PEDIDOS_PENDENTES:
           await this.handleListPending(data);
+          break;
+        case Intent.CONSULTAR_FILA_COZINHA:
+          await this.handleKitchenQueue(data);
+          break;
+        case Intent.DETALHAR_PEDIDO_COZINHA:
+          await this.handleKitchenOrderDetail(data);
           break;
         case Intent.BLOQUEAR_ITEM_CARDAPIO:
           await this.handleBlockItem(data);
@@ -223,6 +232,153 @@ export class RestaurantManagementHandler {
         text: '❌ Erro ao consultar pedidos pendentes.',
       });
     }
+  }
+
+  private async handleKitchenQueue(data: MessageData): Promise<void> {
+    if (!data.restaurantId) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro: Restaurante não identificado.',
+      });
+      return;
+    }
+
+    try {
+      const preparingOrders = await this.orderRepository.findByRestaurantAndStatus(
+        data.restaurantId,
+        OrderStatus.PREPARING
+      );
+      const readyOrders = await this.orderRepository.findByRestaurantAndStatus(
+        data.restaurantId,
+        OrderStatus.READY
+      );
+
+      const queue = OrderStateMachine.buildKitchenQueue(preparingOrders, readyOrders, 5);
+
+      if (queue.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '✅ Não há pedidos em preparo ou prontos.',
+        });
+        return;
+      }
+
+      const lines = queue.map((order, index) => {
+        const statusIcon = order.getStatus() === OrderStatus.PREPARING ? '👨‍🍳' : '✅';
+        return `${index + 1}. ${statusIcon} Pedido #${order.getId().slice(0, 8)} - ${order.getTotal().getFormatted()}`;
+      });
+
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `📋 Fila da cozinha:\n\n${lines.join('\n')}\n\nPara ver detalhes, envie: detalhe <id>`,
+      });
+    } catch (error: any) {
+      logger.error('Error listing kitchen queue', { error: error.message });
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro ao consultar fila da cozinha.',
+      });
+    }
+  }
+
+  private async handleKitchenOrderDetail(data: MessageData): Promise<void> {
+    if (!data.restaurantId) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro: Restaurante não identificado.',
+      });
+      return;
+    }
+
+    const orderIdPrefix = this.extractOrderIdPrefix(data.text);
+    if (!orderIdPrefix) {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❓ Informe o ID do pedido. Exemplo: detalhe abc12345',
+      });
+      return;
+    }
+
+    try {
+      const orders = await this.orderRepository.findByRestaurantId(data.restaurantId);
+      const matches = orders.filter((order) =>
+        order.getId().toLowerCase().startsWith(orderIdPrefix.toLowerCase())
+      );
+
+      if (matches.length === 0) {
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: '❌ Pedido não encontrado. Verifique o ID e tente novamente.',
+        });
+        return;
+      }
+
+      if (matches.length > 1) {
+        const options = matches.map((order) => `#${order.getId().slice(0, 8)}`).join(', ');
+        await this.evolutionApi.sendMessage({
+          to: data.from,
+          text: `🔎 Encontramos mais de um pedido: ${options}\n\nEnvie um ID mais específico.`,
+        });
+        return;
+      }
+
+      const order = matches[0];
+      const items = await this.orderItemRepository.findByOrderId(order.getId());
+      const itemsWithNames = await Promise.all(
+        items.map(async (item) => {
+          const menuItem = await this.menuItemRepository.findById(item.getMenuItemId());
+          return {
+            name: menuItem?.getName() || 'Item',
+            quantity: item.getQuantity(),
+            price: item.getPrice().getFormatted(),
+            subtotal: item.getSubtotal().getFormatted(),
+          };
+        })
+      );
+
+      const itemsText =
+        itemsWithNames.length === 0
+          ? 'Nenhum item encontrado.'
+          : itemsWithNames
+              .map(
+                (item, index) =>
+                  `${index + 1}. ${item.quantity}x ${item.name} - ${item.price} (Subtotal: ${item.subtotal})`
+              )
+              .join('\n');
+
+      const statusLabel =
+        order.getStatus() === OrderStatus.PREPARING
+          ? '👨‍🍳 Em preparo'
+          : order.getStatus() === OrderStatus.READY
+            ? '✅ Pronto'
+            : order.getStatus();
+
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `📦 Pedido #${order.getId().slice(0, 8)}\n\nStatus: ${statusLabel}\n\nItens:\n${itemsText}\n\nTotal: ${order.getTotal().getFormatted()}`,
+      });
+    } catch (error: any) {
+      logger.error('Error fetching kitchen order details', { error: error.message });
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro ao buscar detalhes do pedido.',
+      });
+    }
+  }
+
+  private extractOrderIdPrefix(text: string): string | null {
+    const directMatch = text.match(/(?:detalhe|detalhar)\s+([a-z0-9-]{6,})/i);
+    if (directMatch?.[1]) {
+      return directMatch[1];
+    }
+
+    const tokenWithNumber = text.match(/[a-z0-9-]*\d[a-z0-9-]{4,}/i);
+    if (tokenWithNumber?.[0]) {
+      return tokenWithNumber[0];
+    }
+
+    const fallback = text.match(/[a-z0-9]{6,}/i);
+    return fallback ? fallback[0] : null;
   }
 
   private async handleBlockItem(data: MessageData): Promise<void> {

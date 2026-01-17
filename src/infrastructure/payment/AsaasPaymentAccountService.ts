@@ -39,7 +39,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         addressNumber: input.addressNumber,
         complement: input.complement,
         province: input.province,
-        city: input.city,
+        city: /^\d+$/.test(String(input.city)) ? Number(input.city) : input.city,
         state: input.state,
       };
 
@@ -97,12 +97,26 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
 
       if (!response.ok) {
         let errorMessage = 'Failed to create sub-account';
+        let errorDescription = '';
         try {
           const errorData = await response.json() as any;
-          errorMessage = errorData.errors?.[0]?.description || errorData.message || errorMessage;
+          errorDescription = errorData.errors?.[0]?.description || errorData.message || '';
+          errorMessage = errorDescription || errorMessage;
         } catch (parseError) {
           // Se não conseguir parsear JSON, usa mensagem padrão
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+
+        if (this.isDuplicateCpfCnpjError(errorMessage)) {
+          const existingAccount = await this.findExistingAccountByCpfCnpj(documentNumber);
+          if (existingAccount) {
+            return {
+              accountId: existingAccount.id,
+              walletId: existingAccount.walletId,
+              status: 'pending' as const,
+              requiresAdditionalInfo: !existingAccount.postalCode || !existingAccount.address,
+            };
+          }
         }
         logger.error('Error creating Asaas sub-account', { error: errorMessage, input });
         throw new Error(errorMessage);
@@ -119,6 +133,56 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
     } catch (error: any) {
       logger.error('Error creating Asaas sub-account', { error: error.message, input });
       throw new Error(`Failed to create sub-account: ${error.message}`);
+    }
+  }
+
+  private isDuplicateCpfCnpjError(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return normalized.includes('já está em uso') || normalized.includes('already registered');
+  }
+
+  private async findExistingAccountByCpfCnpj(documentNumber: string): Promise<any | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/accounts?cpfCnpj=${documentNumber}&limit=1`, {
+        headers: {
+          'access_token': this.apiKey,
+          'User-Agent': 'HeroCity/1.0',
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to list Asaas accounts';
+        try {
+          const errorData = await response.json() as any;
+          errorMessage = errorData.errors?.[0]?.description || errorData.message || errorMessage;
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        logger.warn('Failed to fetch existing Asaas account', { error: errorMessage, documentNumber });
+        return null;
+      }
+
+      const data = await response.json() as any;
+      if (data?.id) {
+        return data;
+      }
+
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.accounts)
+        ? data.accounts
+        : [];
+
+      const account = list[0];
+      if (!account) {
+        logger.warn('No existing Asaas account found for CPF/CNPJ', { documentNumber });
+      }
+      return account || null;
+    } catch (error: any) {
+      logger.error('Error fetching existing Asaas account', { error: error.message, documentNumber });
+      return null;
     }
   }
 

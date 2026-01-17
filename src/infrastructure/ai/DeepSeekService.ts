@@ -69,6 +69,8 @@ INTENÇÕES DO RESTAURANTE:
 - marcar_pedido_preparo: iniciar preparo de pedido pago
 - marcar_pedido_pronto: notificar que pedido está pronto
 - consultar_pedidos_pendentes: listar pedidos não preparados
+- consultar_fila_cozinha: listar fila única da cozinha (preparing + top ready)
+- detalhar_pedido_cozinha: mostrar detalhes de um pedido específico informado por id/numero
 - notificar_cliente: enviar mensagens de status manualmente
 - bloquear_item_cardapio: desabilitar item temporariamente
 - desbloquear_item_cardapio: habilitar item novamente
@@ -83,6 +85,9 @@ IMPORTANTE SOBRE restaurant_onboarding vs cadastrar_item_cardapio:
 IMPORTANTE:
 - Se o usuário for NEW_USER e digitar apenas "1" ou "opção 1", identifique como "restaurant_onboarding"
 - Se o usuário for NEW_USER e digitar "2" ou "opção 2" ou "fazer pedido", identifique como "criar_pedido"
+-
+- Se o restaurante pedir "fila cozinha", "fila da cozinha", "pedidos em preparo" ou similar, use "consultar_fila_cozinha"
+- Se o restaurante pedir "detalhe 123", "detalhe pedido 123" ou similar, use "detalhar_pedido_cozinha"
 
 FORMATO DE RESPOSTA (JSON):
 {

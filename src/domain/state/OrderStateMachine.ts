@@ -1,4 +1,5 @@
-﻿import { OrderStatus } from '../enums/OrderStatus';
+import { OrderStatus } from '../enums/OrderStatus';
+import { Order } from '../entities/Order';
 
 export type McpOrderStatus =
   | 'NEW'
@@ -36,6 +37,20 @@ const domainToMcpMap: Record<OrderStatus, McpOrderStatus> = {
 };
 
 export class OrderStateMachine {
+  static buildKitchenQueue(
+    preparingOrders: Order[],
+    readyOrders: Order[],
+    readyLimit = 5
+  ): Order[] {
+    const byCreatedAsc = (a: Order, b: Order) =>
+      a.getCreatedAt().getTime() - b.getCreatedAt().getTime();
+
+    const preparingSorted = [...preparingOrders].sort(byCreatedAsc);
+    const readySorted = [...readyOrders].sort(byCreatedAsc).slice(0, readyLimit);
+
+    return [...preparingSorted, ...readySorted];
+  }
+
   static toDomainStatus(status: string): OrderStatus {
     const key = status.toUpperCase();
     const mapped = mcpToDomainMap[key];
@@ -73,16 +88,24 @@ export class OrderStateMachine {
     }
   }
 
-  static assertCanNotifyKitchen(status: OrderStatus): void {
-    if (status !== OrderStatus.PAID) {
-      throw new Error('Kitchen can only be notified after payment is confirmed');
+  static assertCanNotifyKitchen(status: OrderStatus, allowBeforePayment = false): void {
+    if (status === OrderStatus.PAID) {
+      return;
     }
+    if (allowBeforePayment && status === OrderStatus.AWAITING_PAYMENT) {
+      return;
+    }
+    throw new Error('Kitchen can only be notified after payment is confirmed');
   }
 
-  static assertCanMarkPreparing(status: OrderStatus): void {
-    if (status !== OrderStatus.PAID) {
-      throw new Error('Order can only move to IN_PREPARATION from PAID');
+  static assertCanMarkPreparing(status: OrderStatus, allowBeforePayment = false): void {
+    if (status === OrderStatus.PAID) {
+      return;
     }
+    if (allowBeforePayment && (status === OrderStatus.AWAITING_PAYMENT || status === OrderStatus.DRAFT)) {
+      return;
+    }
+    throw new Error('Order can only move to IN_PREPARATION from PAID');
   }
 
   static assertCanMarkReady(status: OrderStatus): void {

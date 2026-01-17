@@ -205,7 +205,7 @@ export class OrchestrationService {
       if (intentResult.intent === Intent.RESTAURANT_ONBOARDING && userContextResult.type === UserContext.RESTAURANT) {
         await this.evolutionApi.sendMessage({
           to: from,
-          text: `✅ Você já está cadastrado como restaurante!\n\nPara gerenciar seu cardápio, use:\n• "cadastrar cardápio" - Adicionar itens\n• "ver cardápio" - Ver itens cadastrados\n• "bloquear item" - Marcar item como indisponível\n• "desbloquear item" - Marcar item como disponível\n• "pedidos pendentes" - Ver pedidos aguardando preparo`,
+          text: `✅ Você já está cadastrado como restaurante!\n\nPara gerenciar seu cardápio, use:\n• "cadastrar cardápio" - Adicionar itens\n• "ver cardápio" - Ver itens cadastrados\n• "bloquear item" - Marcar item como indisponível\n• "desbloquear item" - Marcar item como disponível\n• "pedidos pendentes" - Ver pedidos aguardando preparo\n• "fila cozinha" - Ver fila da cozinha\n• "detalhe <id>" - Ver detalhes de um pedido`,
         });
         // Idempotência: marca mensagem como processada
         if (messageId && this.idempotencyService) {
@@ -315,6 +315,8 @@ Digite o número da opção ou escreva sua escolha! 😊`;
       case Intent.MARCAR_PEDIDO_PREPARO:
       case Intent.MARCAR_PEDIDO_PRONTO:
       case Intent.CONSULTAR_PEDIDOS_PENDENTES:
+      case Intent.CONSULTAR_FILA_COZINHA:
+      case Intent.DETALHAR_PEDIDO_COZINHA:
       case Intent.NOTIFICAR_CLIENTE:
       case Intent.BLOQUEAR_ITEM_CARDAPIO:
       case Intent.DESBLOQUEAR_ITEM_CARDAPIO:
@@ -355,6 +357,8 @@ Digite o número da opção ou escreva sua escolha! 😊`;
 • Marcar pedido em preparo
 • Marcar pedido pronto
 • Consultar pedidos pendentes
+• Fila da cozinha
+• Detalhe <id>
 • Notificar cliente
 • Bloquear/Desbloquear item
 

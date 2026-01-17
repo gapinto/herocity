@@ -121,6 +121,10 @@ Digite o nome do seu restaurante:`,
         await this.handleDocument(data, conversation);
         break;
 
+      case OnboardingState.WAITING_KITCHEN_RULE:
+        await this.handleKitchenRule(data, conversation);
+        break;
+
       case OnboardingState.CREATING_PAYMENT_ACCOUNT:
         // Estado interno - aguarda criação de subconta
         await this.evolutionApi.sendMessage({
@@ -496,7 +500,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
       // Busca conversação atualizada
       const updatedConversation = await this.conversationState.getConversation(data.from);
       if (updatedConversation) {
-        await this.completeOnboardingWithPayment(data.from, updatedConversation);
+        await this.askKitchenRule(data.from);
       } else {
         await this.evolutionApi.sendMessage({
           to: data.from,
@@ -513,9 +517,48 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
 
   private async handleSkipDocument(
     data: MessageData,
-    conversation: OnboardingData
+    _conversation: OnboardingData
   ): Promise<void> {
-    await this.completeOnboardingWithPayment(data.from, conversation);
+    await this.askKitchenRule(data.from);
+  }
+
+  private async handleKitchenRule(
+    data: MessageData,
+    _conversation: OnboardingData
+  ): Promise<void> {
+    const text = data.text.trim().toLowerCase();
+    if (text !== 'sim' && text !== 'nao' && text !== 'não') {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❓ Responda com "sim" ou "nao". Deseja permitir notificar a cozinha antes do pagamento?',
+      });
+      return;
+    }
+
+    const allowKitchenNotifyBeforePayment = text === 'sim';
+    await this.conversationState.updateData(data.from, { allowKitchenNotifyBeforePayment });
+
+    const updatedConversation = await this.conversationState.getConversation(data.from);
+    if (updatedConversation) {
+      await this.completeOnboardingWithPayment(data.from, updatedConversation);
+    } else {
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: '❌ Erro ao processar sua resposta. Por favor, tente novamente.',
+      });
+    }
+  }
+
+  private async askKitchenRule(from: string): Promise<void> {
+    await this.conversationState.updateState(from, OnboardingState.WAITING_KITCHEN_RULE);
+    await this.evolutionApi.sendMessage({
+      to: from,
+      text: `✅ Continuando cadastro.
+
+**9️⃣ Notificar cozinha antes do pagamento**
+Deseja permitir que a cozinha seja notificada antes do pagamento?
+Responda "sim" ou "nao".`,
+    });
   }
 
   private async completeOnboardingWithPayment(
@@ -560,6 +603,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
         email: conversation.email,
         bankAccount: conversation.bankAccount,
         documentUrl: conversation.documentUrl,
+        allowKitchenNotifyBeforePayment: conversation.allowKitchenNotifyBeforePayment ?? false,
         isActive: true,
       });
 
@@ -586,6 +630,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
             bankAccount: conversation.bankAccount,
             documentUrl: conversation.documentUrl,
             birthDate: saved.getBirthDate(),
+            incomeValue: saved.getIncomeValue(),
             address: conversation.address ?? '',
             postalCode: '',
             addressNumber: '',
@@ -627,6 +672,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
 • E-mail: ${saved.getEmail()}
 
 💰 Conta de Pagamento: ${paymentAccountResponse.status === 'approved' ? '✅ Aprovada' : '⏳ Pendente de aprovação'}
+${paymentAccountResponse.status === 'pending' ? '\n⚠️ Para liberar PIX, finalize a ativação usando a chave recebida no seu celular pelo Asaas.' : ''}
 
 Agora você pode:
 • Receber pagamentos de clientes

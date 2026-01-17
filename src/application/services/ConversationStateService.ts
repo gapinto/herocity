@@ -10,6 +10,7 @@ export enum OnboardingState {
   WAITING_EMAIL = 'WAITING_EMAIL',
   WAITING_BANK_ACCOUNT = 'WAITING_BANK_ACCOUNT', // Dados bancários
   WAITING_DOCUMENT = 'WAITING_DOCUMENT', // Documento do responsável (opcional, pode pular)
+  WAITING_KITCHEN_RULE = 'WAITING_KITCHEN_RULE', // Regra de notificar cozinha antes do pagamento
   CREATING_PAYMENT_ACCOUNT = 'CREATING_PAYMENT_ACCOUNT', // Criando subconta no provedor
   COMPLETED = 'COMPLETED',
 }
@@ -24,6 +25,7 @@ export interface OnboardingData {
   email?: string;
   bankAccount?: BankAccountData;
   documentUrl?: string;
+  allowKitchenNotifyBeforePayment?: boolean;
 }
 
 export class ConversationStateService {

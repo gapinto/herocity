@@ -421,13 +421,24 @@ describe('RestaurantOnboardingHandler', () => {
       await handler.handle({ ...messageData, text: 'João Silva' } as any); // Titular
       jest.clearAllMocks();
 
-      await handler.handle(messageData as any); // Pula documento e completa
+      await handler.handle(messageData as any); // Pula documento e pergunta regra
+      await handler.handle({ ...messageData, text: 'sim' } as any); // Confirma regra
 
       expect(mockPaymentAccountService.createSubAccount).toHaveBeenCalled();
       expect(mockRestaurantRepository.save).toHaveBeenCalled();
       expect(mockEvolutionApi.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
+          text: expect.stringContaining('Notificar cozinha antes do pagamento'),
+        })
+      );
+      expect(mockEvolutionApi.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
           text: expect.stringContaining('Restaurante cadastrado com sucesso'),
+        })
+      );
+      expect(mockEvolutionApi.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('ativação'),
         })
       );
     });
@@ -480,7 +491,8 @@ describe('RestaurantOnboardingHandler', () => {
       await handler.handle({ ...messageData, text: 'João Silva' } as any); // Titular
       jest.clearAllMocks();
 
-      await handler.handle(messageData as any); // Tenta completar
+      await handler.handle(messageData as any); // Pula documento
+      await handler.handle({ ...messageData, text: 'nao' } as any); // Confirma regra
 
       expect(mockRestaurantRepository.save).toHaveBeenCalled();
       const lastCall = mockEvolutionApi.sendMessage.mock.calls[mockEvolutionApi.sendMessage.mock.calls.length - 1][0];
@@ -520,6 +532,7 @@ describe('RestaurantOnboardingHandler', () => {
       jest.clearAllMocks();
 
       await handlerWithoutPayment.handle({ ...messageData, text: '81999999999' } as any);
+      await handlerWithoutPayment.handle({ ...messageData, text: 'sim' } as any);
 
       // Deve mostrar erro porque faltam campos de pagamento
       // Mas não deve quebrar
