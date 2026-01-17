@@ -66,7 +66,34 @@ export class Order {
     return new Order(props);
   }
 
-  static fromPersistence(props: Required<Omit<OrderProps, 'paymentMethod' | 'paymentLink' | 'paymentId' | 'platformFee' | 'restaurantAmount' | 'paidAt'>> & Partial<Pick<OrderProps, 'paymentMethod' | 'paymentLink' | 'paymentId' | 'platformFee' | 'restaurantAmount' | 'paidAt'>>): Order {
+  static fromPersistence(
+    props: Required<
+      Omit<
+        OrderProps,
+        | 'paymentMethod'
+        | 'paymentLink'
+        | 'paymentId'
+        | 'platformFee'
+        | 'restaurantAmount'
+        | 'paidAt'
+        | 'dailySequence'
+        | 'sequenceDate'
+      >
+    > &
+      Partial<
+        Pick<
+          OrderProps,
+          | 'paymentMethod'
+          | 'paymentLink'
+          | 'paymentId'
+          | 'platformFee'
+          | 'restaurantAmount'
+          | 'paidAt'
+          | 'dailySequence'
+          | 'sequenceDate'
+        >
+      >
+  ): Order {
     return new Order(props);
   }
 

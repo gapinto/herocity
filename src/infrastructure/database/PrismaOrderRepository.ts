@@ -52,8 +52,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
-      dailySequence: item.dailySequence ?? undefined,
-      sequenceDate: item.sequenceDate || undefined,
+        dailySequence: item.dailySequence ?? undefined,
+        sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -79,8 +79,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
-      dailySequence: item.dailySequence ?? undefined,
-      sequenceDate: item.sequenceDate || undefined,
+        dailySequence: item.dailySequence ?? undefined,
+        sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -106,6 +106,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
+        dailySequence: item.dailySequence ?? undefined,
+        sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -137,6 +139,8 @@ export class PrismaOrderRepository implements IOrderRepository {
         platformFee: item.platformFee ? Price.create(Number(item.platformFee)) : undefined,
         restaurantAmount: item.restaurantAmount ? Price.create(Number(item.restaurantAmount)) : undefined,
         paidAt: item.paidAt || undefined,
+        dailySequence: item.dailySequence ?? undefined,
+        sequenceDate: item.sequenceDate || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
