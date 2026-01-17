@@ -22,7 +22,7 @@ export class MessageFormatter {
       })
       .join('\n');
 
-    return `📋 Cardápio:\n\n${itemsList}\n\nDigite "adicionar [número] [quantidade]" para adicionar ao pedido.\nExemplo: "adicionar 1 2" (2 unidades do item 1)`;
+    return `📋 Cardápio:\n\n${itemsList}\n\nDigite os itens diretamente, por exemplo:\n• "2 hambúrgueres e 1 refrigerante"\n• "quero 1 pizza grande"\n\nOu digite "finalizar" para confirmar.`;
   }
 
   static formatRestaurantList(restaurants: Restaurant[]): string {

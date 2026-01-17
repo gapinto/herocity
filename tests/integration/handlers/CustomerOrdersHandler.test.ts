@@ -14,7 +14,9 @@ import { Order } from '../../../src/domain/entities/Order';
 import { OrderStatus } from '../../../src/domain/enums/OrderStatus';
 import { Price } from '../../../src/domain/value-objects/Price';
 import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
+import { OrderCreationState } from '../../../src/application/services/OrderStateService';
 import { IPaymentService } from '../../../src/domain/services/IPaymentService';
+import { MenuItem } from '../../../src/domain/entities/MenuItem';
 
 describe('CustomerOrdersHandler Integration', () => {
   let handler: CustomerOrdersHandler;
@@ -225,6 +227,109 @@ describe('CustomerOrdersHandler Integration', () => {
       expect(createOrder.execute).toHaveBeenCalled();
       expect(notificationService.notifyOrderCreated).toHaveBeenCalled();
       expect(evolutionApi.sendMessage).toHaveBeenCalled();
+    });
+  });
+
+  describe('Given a customer is adding items from the menu', () => {
+    it('should parse natural language and add items', async () => {
+      const data: MessageData = {
+        from: '81999999999',
+        text: '2 hambúrgueres e 1 refrigerante',
+        userContext: UserContext.CUSTOMER,
+        customerId: 'customer-123',
+      };
+
+      orderState.getOrderData = jest.fn().mockResolvedValue({
+        state: OrderCreationState.ADDING_ITEMS,
+        restaurantId: 'restaurant-123',
+        items: [],
+      });
+
+      const burger = MenuItem.create({
+        id: 'item-burger',
+        restaurantId: 'restaurant-123',
+        name: 'Hambúrguer',
+        price: Price.create(25.0),
+        isAvailable: true,
+      });
+      const soda = MenuItem.create({
+        id: 'item-soda',
+        restaurantId: 'restaurant-123',
+        name: 'Refrigerante',
+        price: Price.create(6.0),
+        isAvailable: true,
+      });
+
+      menuItemRepository.findAvailableByRestaurantId = jest
+        .fn()
+        .mockResolvedValue([burger, soda] as any);
+      menuItemRepository.findById = jest.fn().mockImplementation((id: string) => {
+        if (id === 'item-burger') return Promise.resolve(burger as any);
+        if (id === 'item-soda') return Promise.resolve(soda as any);
+        return Promise.resolve(null);
+      });
+
+      await handler.handle(Intent.CRIAR_PEDIDO, data);
+
+      expect(orderState.addItem).toHaveBeenCalledTimes(2);
+      expect(orderState.addItem).toHaveBeenCalledWith(
+        data.from,
+        expect.objectContaining({ menuItemId: 'item-burger', quantity: 2 })
+      );
+      expect(orderState.addItem).toHaveBeenCalledWith(
+        data.from,
+        expect.objectContaining({ menuItemId: 'item-soda', quantity: 1 })
+      );
+      expect(evolutionApi.sendMessage).toHaveBeenCalled();
+    });
+
+    it('should ask for disambiguation when multiple items match', async () => {
+      const data: MessageData = {
+        from: '81999999999',
+        text: '1 hamburguer',
+        userContext: UserContext.CUSTOMER,
+        customerId: 'customer-123',
+      };
+
+      orderState.getOrderData = jest.fn().mockResolvedValue({
+        state: OrderCreationState.ADDING_ITEMS,
+        restaurantId: 'restaurant-123',
+        items: [],
+      });
+
+      const classic = MenuItem.create({
+        id: 'item-classic',
+        restaurantId: 'restaurant-123',
+        name: 'Hambúrguer Clássico',
+        price: Price.create(25.0),
+        isAvailable: true,
+      });
+      const artisan = MenuItem.create({
+        id: 'item-artisan',
+        restaurantId: 'restaurant-123',
+        name: 'Hambúrguer Artesanal',
+        price: Price.create(28.0),
+        isAvailable: true,
+      });
+
+      menuItemRepository.findAvailableByRestaurantId = jest
+        .fn()
+        .mockResolvedValue([classic, artisan] as any);
+
+      await handler.handle(Intent.CRIAR_PEDIDO, data);
+
+      expect(orderState.setPendingAmbiguity).toHaveBeenCalledWith(
+        data.from,
+        expect.objectContaining({
+          itemName: expect.stringContaining('hamburguer'),
+          matches: expect.any(Array),
+        })
+      );
+      expect(evolutionApi.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('opções'),
+        })
+      );
     });
   });
 });

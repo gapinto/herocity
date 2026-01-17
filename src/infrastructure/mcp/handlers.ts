@@ -19,12 +19,14 @@ import { Phone } from '../../domain/value-objects/Phone';
 import { Customer } from '../../domain/entities/Customer';
 import { OrderItem } from '../../domain/entities/OrderItem';
 import { MenuItem } from '../../domain/entities/MenuItem';
+import { Order } from '../../domain/entities/Order';
 import { Restaurant } from '../../domain/entities/Restaurant';
 import { metricsService } from '../../application/services/MetricsService';
 import { MessageFormatter } from '../../application/services/MessageFormatter';
 import { OnboardingData, OnboardingState } from '../../application/services/ConversationStateService';
 import { createAsaasWebhookConfig } from '../../shared/utils/asaasWebhook';
 import { getLocalDateStart, getTimezoneOrDefault } from '../../shared/utils/timezone';
+import { normalizeText, parseMenuItemRequests } from '../../shared/utils/menuTextParser';
 
 export interface McpDependencies {
   restaurantRepository: IRestaurantRepository;
@@ -113,6 +115,54 @@ async function assertOrderHasItems(deps: McpDependencies, orderId: string): Prom
   if (items.length === 0) {
     throw new Error('Order has no items');
   }
+}
+
+function findMenuMatches(itemName: string, menuItems: MenuItem[]): MenuItem[] {
+  const normalizedName = normalizeText(itemName);
+  return menuItems.filter((item) => {
+    const candidate = normalizeText(item.getName());
+    return candidate.includes(normalizedName) || normalizedName.includes(candidate);
+  });
+}
+
+async function applyMenuItemsToOrder(
+  deps: McpDependencies,
+  order: Order,
+  items: Array<{ menuItem: MenuItem; quantity: number }>
+): Promise<void> {
+  const orderItems = await deps.orderItemRepository.findByOrderId(order.getId());
+
+  for (const entry of items) {
+    if (entry.quantity < 1) {
+      continue;
+    }
+    const existing = orderItems.find((item) => item.getMenuItemId() === entry.menuItem.getId());
+    if (existing) {
+      await deps.orderItemRepository.delete(existing.getId());
+    }
+
+    const quantity = existing ? existing.getQuantity() + entry.quantity : entry.quantity;
+    const newItem = OrderItem.create({
+      orderId: order.getId(),
+      menuItemId: entry.menuItem.getId(),
+      quantity,
+      price: entry.menuItem.getPrice(),
+    });
+    await deps.orderItemRepository.save(newItem);
+  }
+
+  const total = await recalculateTotal(deps, order.getId());
+  order.updateTotal(total);
+  if (order.getStatus() === OrderStatus.DRAFT) {
+    const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
+    if (!restaurant) throw new Error('Restaurant not found');
+    order.setSequenceDate(
+      getLocalDateStart(new Date(), getTimezoneOrDefault(restaurant.getTimezone()))
+    );
+    order.updateStatus(OrderStatus.NEW);
+  }
+
+  await deps.orderRepository.save(order);
 }
 
 function parseOnboardingState(state: string): OnboardingState {
@@ -546,6 +596,76 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         order.updateStatus(OrderStatus.NEW);
       }
       await deps.orderRepository.save(order);
+
+      return await formatOrder(deps, order.getId());
+    },
+
+    async add_items_from_text(params) {
+      const order = await deps.orderRepository.findById(params.order_id);
+      if (!order) throw new Error('Order not found');
+      OrderStateMachine.assertCanModify(order.getStatus());
+
+      const requests = parseMenuItemRequests(params.text || '');
+      if (requests.length === 0) {
+        return {
+          status: 'not_found',
+          order_id: order.getId(),
+          missing_items: [],
+        };
+      }
+
+      const menuItems = await deps.menuItemRepository.findAvailableByRestaurantId(
+        order.getRestaurantId()
+      );
+
+      const confirmed: Array<{ menuItem: MenuItem; quantity: number }> = [];
+      const ambiguities: Array<{ itemName: string; quantity: number; matches: MenuItem[] }> = [];
+      const missing: string[] = [];
+
+      for (const request of requests) {
+        const matches = findMenuMatches(request.name, menuItems);
+        if (matches.length === 0) {
+          missing.push(request.name);
+        } else if (matches.length === 1) {
+          confirmed.push({ menuItem: matches[0], quantity: request.quantity });
+        } else {
+          ambiguities.push({
+            itemName: request.name,
+            quantity: request.quantity,
+            matches,
+          });
+        }
+      }
+
+      if (confirmed.length > 0) {
+        await applyMenuItemsToOrder(deps, order, confirmed);
+      }
+
+      if (ambiguities.length > 0) {
+        return {
+          status: 'ambiguous',
+          order_id: order.getId(),
+          order: await formatOrder(deps, order.getId()),
+          ambiguities: ambiguities.map((item) => ({
+            item_name: item.itemName,
+            quantity: item.quantity,
+            options: item.matches.map((match) => ({
+              id: match.getId(),
+              name: match.getName(),
+              price: match.getPrice().getValue(),
+            })),
+          })),
+          missing_items: missing,
+        };
+      }
+
+      if (confirmed.length === 0) {
+        return {
+          status: 'not_found',
+          order_id: order.getId(),
+          missing_items: missing,
+        };
+      }
 
       return await formatOrder(deps, order.getId());
     },

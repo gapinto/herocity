@@ -5,6 +5,7 @@ import { Price } from '../../../../src/domain/value-objects/Price';
 import { Phone } from '../../../../src/domain/value-objects/Phone';
 import { Restaurant } from '../../../../src/domain/entities/Restaurant';
 import { Customer } from '../../../../src/domain/entities/Customer';
+import { MenuItem } from '../../../../src/domain/entities/MenuItem';
 
 const makeDeps = () => {
   const baseAddress = {
@@ -273,5 +274,78 @@ describe('MCP handlers', () => {
     await expect(
       handlers.request_payment({ order_id: order.getId(), method: 'pix' })
     ).rejects.toThrow('Order has no items');
+  });
+
+  it('add_items_from_text adds items from natural language', async () => {
+    const { deps, order } = makeDeps();
+    const handlers = createMcpHandlers(deps as any);
+
+    const burger = MenuItem.create({
+      id: 'item-burger',
+      restaurantId: order.getRestaurantId(),
+      name: 'Hambúrguer',
+      price: Price.create(20),
+      isAvailable: true,
+    });
+    const soda = MenuItem.create({
+      id: 'item-soda',
+      restaurantId: order.getRestaurantId(),
+      name: 'Refrigerante',
+      price: Price.create(6),
+      isAvailable: true,
+    });
+
+    deps.menuItemRepository.findAvailableByRestaurantId = jest
+      .fn()
+      .mockResolvedValue([burger, soda]);
+    deps.orderRepository.findById = jest.fn().mockResolvedValue(order);
+
+    const result = await handlers.add_items_from_text({
+      order_id: order.getId(),
+      text: '2 hamburgueres e 1 refrigerante',
+    });
+
+    expect(deps.orderItemRepository.save).toHaveBeenCalledTimes(2);
+    expect(result.order_id).toBe(order.getId());
+  });
+
+  it('add_items_from_text returns ambiguity options', async () => {
+    const { deps, order } = makeDeps();
+    const handlers = createMcpHandlers(deps as any);
+
+    const classic = MenuItem.create({
+      id: 'item-classic',
+      restaurantId: order.getRestaurantId(),
+      name: 'Hambúrguer Clássico',
+      price: Price.create(20),
+      isAvailable: true,
+    });
+    const artisan = MenuItem.create({
+      id: 'item-artisan',
+      restaurantId: order.getRestaurantId(),
+      name: 'Hambúrguer Artesanal',
+      price: Price.create(25),
+      isAvailable: true,
+    });
+
+    deps.menuItemRepository.findAvailableByRestaurantId = jest
+      .fn()
+      .mockResolvedValue([classic, artisan]);
+    deps.orderRepository.findById = jest.fn().mockResolvedValue(order);
+
+    const result = await handlers.add_items_from_text({
+      order_id: order.getId(),
+      text: '1 hamburguer',
+    });
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.ambiguities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          item_name: expect.stringContaining('hamburguer'),
+          options: expect.any(Array),
+        }),
+      ])
+    );
   });
 });

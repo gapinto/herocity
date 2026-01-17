@@ -17,6 +17,7 @@ import { MenuItem } from '../../domain/entities/MenuItem';
 import { Customer } from '../../domain/entities/Customer';
 import { Phone } from '../../domain/value-objects/Phone';
 import { logger } from '../../shared/utils/logger';
+import { normalizeText, parseMenuItemRequests } from '../../shared/utils/menuTextParser';
 
 export class CustomerOrdersHandler {
   constructor(
@@ -356,75 +357,98 @@ export class CustomerOrdersHandler {
       return;
     }
 
-    // Tenta parsear: "adicionar 1 2" ou "1 2" ou "2 hambúrgueres"
-    const addMatch = text.match(/adicionar\s+(\d+)\s+(\d+)/) || text.match(/^(\d+)\s+(\d+)$/);
-    if (addMatch) {
-      const itemNumber = parseInt(addMatch[1]);
-      const quantity = parseInt(addMatch[2]);
-
-      await this.addItemToCart(data, orderData.restaurantId, itemNumber, quantity);
+    if (text === 'ver cardapio' || text === 'ver cardápio' || text === 'cardapio') {
+      const updatedOrderData = await this.orderState.getOrderData(data.from);
+      if (updatedOrderData) {
+        await this.handleViewMenu(data, updatedOrderData);
+      }
       return;
     }
 
-    // Tenta parsear: "adicionar 1" (quantidade padrão: 1)
-    const singleMatch = text.match(/adicionar\s+(\d+)/) || text.match(/^(\d+)$/);
-    if (singleMatch) {
-      const itemNumber = parseInt(singleMatch[1]);
-      await this.addItemToCart(data, orderData.restaurantId, itemNumber, 1);
-      return;
-    }
-
-    await this.evolutionApi.sendMessage({
-      to: data.from,
-      text: '❌ Formato inválido. Use:\n• "adicionar [número] [quantidade]" (ex: "adicionar 1 2")\n• "finalizar" para confirmar\n• "ver carrinho" para ver itens',
-    });
-  }
-
-  private async addItemToCart(
-    data: MessageData,
-    restaurantId: string,
-    itemNumber: number,
-    quantity: number
-  ): Promise<void> {
-    try {
-      const items = await this.menuItemRepository.findAvailableByRestaurantId(restaurantId);
-
-      if (itemNumber < 1 || itemNumber > items.length) {
-        await this.evolutionApi.sendMessage({
-          to: data.from,
-          text: '❌ Número de item inválido. Por favor, escolha um item da lista.',
-        });
-        return;
-      }
-
-      if (quantity < 1 || quantity > 99) {
-        await this.evolutionApi.sendMessage({
-          to: data.from,
-          text: '❌ Quantidade inválida. Use entre 1 e 99.',
-        });
-        return;
-      }
-
-      const menuItem = items[itemNumber - 1];
-      const unitPrice = menuItem.getPrice().getValue();
-      const totalPrice = unitPrice * quantity;
-
-      await this.orderState.addItem(data.from, {
-        menuItemId: menuItem.getId(),
-        menuItemName: menuItem.getName(),
-        quantity,
-        unitPrice,
-        totalPrice,
-      });
-
-      const total = await this.orderState.calculateTotal(data.from);
-
+    const requests = parseMenuItemRequests(text);
+    if (requests.length === 0) {
       await this.evolutionApi.sendMessage({
         to: data.from,
-        text: `✅ ${quantity}x ${menuItem.getName()} adicionado!\n\nTotal: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total / 100)}\n\nDigite "adicionar [número] [quantidade]" para adicionar mais itens ou "finalizar" para confirmar.`,
+        text: '❌ Não consegui identificar os itens. Exemplo: "2 hambúrgueres e 1 refrigerante".',
+      });
+      return;
+    }
+
+    const menuItems = await this.menuItemRepository.findAvailableByRestaurantId(
+      orderData.restaurantId
+    );
+    const confirmedItems: Array<{ menuItemId: string; quantity: number }> = [];
+    const ambiguities: Array<{ itemName: string; quantity: number; matches: MenuItem[] }> = [];
+    const missingItems: string[] = [];
+
+    for (const request of requests) {
+      const matches = this.findAmbiguousItems(request.name, menuItems);
+      if (matches.length === 0) {
+        missingItems.push(request.name);
+      } else if (matches.length === 1) {
+        confirmedItems.push({
+          menuItemId: matches[0].getId(),
+          quantity: request.quantity,
+        });
+      } else {
+        ambiguities.push({
+          itemName: request.name,
+          quantity: request.quantity,
+          matches,
+        });
+      }
+    }
+
+    if (ambiguities.length > 0) {
+      await this.resolveAmbiguity(data, ambiguities, confirmedItems);
+      return;
+    }
+
+    if (confirmedItems.length === 0) {
+      const missingList = missingItems.length ? `\n\nNão encontrei: ${missingItems.join(', ')}` : '';
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `❌ Não consegui identificar os itens mencionados.${missingList}\n\nDigite "ver cardápio" para ver os itens disponíveis.`,
+      });
+      return;
+    }
+
+    await this.addMenuItemsToCart(data, confirmedItems, missingItems);
+  }
+
+  private async addMenuItemsToCart(
+    data: MessageData,
+    items: Array<{ menuItemId: string; quantity: number }>,
+    missingItems: string[]
+  ): Promise<void> {
+    try {
+      for (const item of items) {
+        const menuItem = await this.menuItemRepository.findById(item.menuItemId);
+        if (!menuItem) {
+          continue;
+        }
+        const unitPrice = menuItem.getPrice().getValue();
+        const totalPrice = unitPrice * item.quantity;
+
+        await this.orderState.addItem(data.from, {
+          menuItemId: menuItem.getId(),
+          menuItemName: menuItem.getName(),
+          quantity: item.quantity,
+          unitPrice,
+          totalPrice,
+        });
+      }
+
+      const total = await this.orderState.calculateTotal(data.from);
+      const missingText = missingItems.length
+        ? `\n\n⚠️ Não encontrei: ${missingItems.join(', ')}`
+        : '';
+      await this.evolutionApi.sendMessage({
+        to: data.from,
+        text: `✅ Itens adicionados ao carrinho!${missingText}\n\nTotal: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total / 100)}\n\nDigite mais itens ou "finalizar" para confirmar.`,
       });
     } catch (error: any) {
-      logger.error('Error adding item to cart', { error: error.message });
+      logger.error('Error adding items to cart', { error: error.message });
       await this.evolutionApi.sendMessage({
         to: data.from,
         text: '❌ Erro ao adicionar item. Tente novamente.',
@@ -976,11 +1000,11 @@ Digite:
   }
 
   private findAmbiguousItems(itemName: string, menuItems: MenuItem[]): MenuItem[] {
-    const normalizedName = itemName.toLowerCase().trim();
+    const normalizedName = normalizeText(itemName);
 
     // Busca itens que contenham o nome mencionado
     const matches = menuItems.filter((item) => {
-      const itemNameLower = item.getName().toLowerCase();
+      const itemNameLower = normalizeText(item.getName());
       // Busca parcial: "hambúrguer" encontra "Hambúrguer Clássico", "Hambúrguer Artesanal", etc
       return itemNameLower.includes(normalizedName) || normalizedName.includes(itemNameLower);
     });
