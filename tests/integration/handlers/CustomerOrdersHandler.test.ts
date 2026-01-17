@@ -11,6 +11,8 @@ import { MessageData } from '../../../src/application/services/OrchestrationServ
 import { Order } from '../../../src/domain/entities/Order';
 import { OrderStatus } from '../../../src/domain/enums/OrderStatus';
 import { Price } from '../../../src/domain/value-objects/Price';
+import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
+import { IPaymentService } from '../../../src/domain/services/IPaymentService';
 
 describe('CustomerOrdersHandler Integration', () => {
   let handler: CustomerOrdersHandler;
@@ -20,6 +22,8 @@ describe('CustomerOrdersHandler Integration', () => {
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
   let createOrder: jest.Mocked<CreateOrder>;
   let notificationService: jest.Mocked<NotificationService>;
+  let orderState: jest.Mocked<IOrderStateService>;
+  let paymentService: jest.Mocked<IPaymentService>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -33,6 +37,7 @@ describe('CustomerOrdersHandler Integration', () => {
       findByCustomerId: jest.fn(),
       findByStatus: jest.fn(),
       findByRestaurantAndStatus: jest.fn(),
+      findByPaymentId: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
     } as any;
@@ -65,13 +70,38 @@ describe('CustomerOrdersHandler Integration', () => {
       notifyOrderCancelled: jest.fn(),
     } as any;
 
+    orderState = {
+      getOrderData: jest.fn().mockResolvedValue(null),
+      startOrderCreation: jest.fn(),
+      setRestaurant: jest.fn(),
+      updateState: jest.fn(),
+      addItem: jest.fn(),
+      removeItem: jest.fn(),
+      calculateTotal: jest.fn().mockResolvedValue(0),
+      setPendingAmbiguity: jest.fn(),
+      getPendingAmbiguity: jest.fn(),
+      clearPendingAmbiguity: jest.fn(),
+      setCurrentOrderId: jest.fn(),
+      getCurrentOrderId: jest.fn(),
+      clearOrderData: jest.fn(),
+    } as any;
+
+    paymentService = {
+      createPayment: jest.fn(),
+      confirmPayment: jest.fn(),
+      getPaymentStatus: jest.fn(),
+      cancelPayment: jest.fn(),
+    } as any;
+
     handler = new CustomerOrdersHandler(
       evolutionApi,
       orderRepository,
       menuItemRepository,
       restaurantRepository,
       createOrder,
-      notificationService
+      notificationService,
+      orderState,
+      paymentService
     );
   });
 

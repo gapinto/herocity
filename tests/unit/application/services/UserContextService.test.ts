@@ -10,6 +10,15 @@ describe('UserContextService', () => {
   let userContextService: UserContextService;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
   let customerRepository: jest.Mocked<ICustomerRepository>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     restaurantRepository = {
@@ -36,6 +45,7 @@ describe('UserContextService', () => {
     const restaurant = Restaurant.create({
       name: 'Restaurante Teste',
       phone,
+      ...baseAddress,
     });
 
     restaurantRepository.findByPhone.mockResolvedValue(restaurant);
@@ -76,6 +86,7 @@ describe('UserContextService', () => {
     const restaurant = Restaurant.create({
       name: 'Restaurante Teste',
       phone,
+      ...baseAddress,
     });
     const customer = Customer.create({ phone });
 

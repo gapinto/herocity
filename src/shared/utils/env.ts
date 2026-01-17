@@ -12,5 +12,6 @@ export const env = {
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY || '',
   EVOLUTION_INSTANCE_NAME: process.env.EVOLUTION_INSTANCE_NAME || 'restaurantes',
   DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || '',
+  ASAAS_WEBHOOK_BASE_URL: process.env.ASAAS_WEBHOOK_BASE_URL || '',
 };
 

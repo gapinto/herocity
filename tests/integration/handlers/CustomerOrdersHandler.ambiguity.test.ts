@@ -3,11 +3,15 @@ import { EvolutionApiService } from '../../../src/infrastructure/messaging/Evolu
 import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemRepository';
 import { MenuItem } from '../../../src/domain/entities/MenuItem';
 import { Price } from '../../../src/domain/value-objects/Price';
+import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
+import { IPaymentService } from '../../../src/domain/services/IPaymentService';
 
 describe('CustomerOrdersHandler - Ambiguity Resolution', () => {
   let handler: CustomerOrdersHandler;
   let evolutionApi: jest.Mocked<EvolutionApiService>;
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
+  let orderState: jest.Mocked<IOrderStateService>;
+  let paymentService: jest.Mocked<IPaymentService>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -31,13 +35,38 @@ describe('CustomerOrdersHandler - Ambiguity Resolution', () => {
       notifyOrderCancelled: jest.fn(),
     } as any;
 
+    orderState = {
+      getOrderData: jest.fn().mockResolvedValue(null),
+      startOrderCreation: jest.fn(),
+      setRestaurant: jest.fn(),
+      updateState: jest.fn(),
+      addItem: jest.fn(),
+      removeItem: jest.fn(),
+      calculateTotal: jest.fn().mockResolvedValue(0),
+      setPendingAmbiguity: jest.fn(),
+      getPendingAmbiguity: jest.fn(),
+      clearPendingAmbiguity: jest.fn(),
+      setCurrentOrderId: jest.fn(),
+      getCurrentOrderId: jest.fn(),
+      clearOrderData: jest.fn(),
+    } as any;
+
+    paymentService = {
+      createPayment: jest.fn(),
+      confirmPayment: jest.fn(),
+      getPaymentStatus: jest.fn(),
+      cancelPayment: jest.fn(),
+    } as any;
+
     handler = new CustomerOrdersHandler(
       evolutionApi,
       {} as any,
       menuItemRepository,
       {} as any,
       {} as any,
-      notificationService
+      notificationService,
+      orderState,
+      paymentService
     );
   });
 

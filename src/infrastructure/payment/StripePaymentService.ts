@@ -57,7 +57,7 @@ export class StripePaymentService implements IPaymentService {
 
     if (request.splitConfig) {
       params.append('payment_intent_data[application_fee_amount]', request.splitConfig.platformFee.toString());
-      params.append('transfer_data[destination]', request.splitConfig.restaurantId);
+      params.append('transfer_data[destination]', request.splitConfig.restaurantWalletId);
     }
 
     // Idempotência nativa do Stripe: usa Idempotency-Key header

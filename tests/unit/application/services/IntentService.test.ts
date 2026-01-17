@@ -14,6 +14,15 @@ describe('IntentService', () => {
   let deepSeekService: jest.Mocked<DeepSeekService>;
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     deepSeekService = {
@@ -157,6 +166,7 @@ describe('IntentService', () => {
       id: 'rest-123',
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       menuRules,
     });
 
@@ -212,6 +222,7 @@ describe('IntentService', () => {
       id: 'rest-123',
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
     });
 
     restaurantRepository.findById.mockResolvedValue(restaurant);

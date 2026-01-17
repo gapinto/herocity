@@ -10,6 +10,8 @@ import { MenuItem } from '../../../src/domain/entities/MenuItem';
 import { Price } from '../../../src/domain/value-objects/Price';
 import { Order } from '../../../src/domain/entities/Order';
 import { OrderStatus } from '../../../src/domain/enums/OrderStatus';
+import { IOrderStateService } from '../../../src/domain/services/IOrderStateService';
+import { IPaymentService } from '../../../src/domain/services/IPaymentService';
 
 describe('CustomerOrdersHandler - Menu Rules Integration', () => {
   let handler: CustomerOrdersHandler;
@@ -17,6 +19,8 @@ describe('CustomerOrdersHandler - Menu Rules Integration', () => {
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
   let createOrder: jest.Mocked<CreateOrder>;
+  let orderState: jest.Mocked<IOrderStateService>;
+  let paymentService: jest.Mocked<IPaymentService>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -52,13 +56,38 @@ describe('CustomerOrdersHandler - Menu Rules Integration', () => {
       notifyOrderCancelled: jest.fn(),
     } as any;
 
+    orderState = {
+      getOrderData: jest.fn().mockResolvedValue(null),
+      startOrderCreation: jest.fn(),
+      setRestaurant: jest.fn(),
+      updateState: jest.fn(),
+      addItem: jest.fn(),
+      removeItem: jest.fn(),
+      calculateTotal: jest.fn().mockResolvedValue(0),
+      setPendingAmbiguity: jest.fn(),
+      getPendingAmbiguity: jest.fn(),
+      clearPendingAmbiguity: jest.fn(),
+      setCurrentOrderId: jest.fn(),
+      getCurrentOrderId: jest.fn(),
+      clearOrderData: jest.fn(),
+    } as any;
+
+    paymentService = {
+      createPayment: jest.fn(),
+      confirmPayment: jest.fn(),
+      getPaymentStatus: jest.fn(),
+      cancelPayment: jest.fn(),
+    } as any;
+
     handler = new CustomerOrdersHandler(
       evolutionApi,
       {} as any,
       menuItemRepository,
       restaurantRepository,
       createOrder,
-      notificationService
+      notificationService,
+      orderState,
+      paymentService
     );
   });
 

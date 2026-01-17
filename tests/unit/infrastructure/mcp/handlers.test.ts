@@ -1,4 +1,4 @@
-﻿import { createMcpHandlers } from '../../../../src/infrastructure/mcp/handlers';
+import { createMcpHandlers } from '../../../../src/infrastructure/mcp/handlers';
 import { OrderStatus } from '../../../../src/domain/enums/OrderStatus';
 import { Order } from '../../../../src/domain/entities/Order';
 import { Price } from '../../../../src/domain/value-objects/Price';
@@ -7,10 +7,20 @@ import { Restaurant } from '../../../../src/domain/entities/Restaurant';
 import { Customer } from '../../../../src/domain/entities/Customer';
 
 const makeDeps = () => {
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
   const restaurant = Restaurant.create({
     id: 'rest-1',
     name: 'Rest',
     phone: Phone.create('5511999999999'),
+    ...baseAddress,
     isActive: true,
   });
 

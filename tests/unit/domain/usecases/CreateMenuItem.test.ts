@@ -10,6 +10,15 @@ describe('CreateMenuItem', () => {
   let createMenuItem: CreateMenuItem;
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     menuItemRepository = {
@@ -36,6 +45,7 @@ describe('CreateMenuItem', () => {
       id: 'restaurant-123',
       name: 'Restaurante Teste',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       isActive: true,
     });
 
@@ -77,6 +87,7 @@ describe('CreateMenuItem', () => {
       id: 'restaurant-123',
       name: 'Restaurante Teste',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       isActive: true,
     });
 

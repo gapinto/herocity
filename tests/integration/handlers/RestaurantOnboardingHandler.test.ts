@@ -1,9 +1,9 @@
-import { RestaurantOnboardingHandler } from '../../../../src/application/handlers/RestaurantOnboardingHandler';
-import { EvolutionApiService } from '../../../../src/infrastructure/messaging/EvolutionApiService';
-import { PrismaRestaurantRepository } from '../../../../src/infrastructure/database/PrismaRestaurantRepository';
-import { AsaasPaymentAccountService } from '../../../../src/infrastructure/payment/AsaasPaymentAccountService';
+import { RestaurantOnboardingHandler } from '../../../src/application/handlers/RestaurantOnboardingHandler';
+import { EvolutionApiService } from '../../../src/infrastructure/messaging/EvolutionApiService';
+import { PrismaRestaurantRepository } from '../../../src/infrastructure/database/PrismaRestaurantRepository';
+import { AsaasPaymentAccountService } from '../../../src/infrastructure/payment/AsaasPaymentAccountService';
 import { PrismaClient } from '@prisma/client';
-import { Phone } from '../../../../src/domain/value-objects/Phone';
+import { InMemoryConversationStateService } from '../../../src/infrastructure/cache/InMemoryConversationStateService';
 
 // Mock do Prisma
 jest.mock('@prisma/client', () => {
@@ -29,6 +29,7 @@ describe('RestaurantOnboardingHandler Integration', () => {
   let evolutionApi: EvolutionApiService;
   let restaurantRepository: PrismaRestaurantRepository;
   let paymentAccountService: AsaasPaymentAccountService;
+  let conversationStateService: InMemoryConversationStateService;
   let prisma: jest.Mocked<PrismaClient>;
   let sendMessageSpy: jest.SpyInstance;
 
@@ -40,12 +41,14 @@ describe('RestaurantOnboardingHandler Integration', () => {
     restaurantRepository = new PrismaRestaurantRepository(prisma);
     evolutionApi = new EvolutionApiService();
     paymentAccountService = new AsaasPaymentAccountService();
+    conversationStateService = new InMemoryConversationStateService();
 
-    sendMessageSpy = jest.spyOn(evolutionApi, 'sendMessage').mockResolvedValue(undefined);
+    sendMessageSpy = jest.spyOn(evolutionApi, 'sendMessage').mockResolvedValue({ success: true });
 
     handler = new RestaurantOnboardingHandler(
       evolutionApi,
       restaurantRepository,
+      conversationStateService,
       paymentAccountService
     );
 
@@ -70,6 +73,12 @@ describe('RestaurantOnboardingHandler Integration', () => {
         name: 'Restaurante Teste',
         phone: '81999999999',
         address: 'Rua das Flores, 123 - Centro',
+        postalCode: '50000000',
+        addressNumber: '123',
+        complement: 'Sala 1',
+        province: 'Centro',
+        city: 'Recife',
+        state: 'PE',
         legalName: 'João Silva',
         cpfCnpj: '12345678900',
         email: 'contato@restaurante.com.br',
@@ -97,23 +106,18 @@ describe('RestaurantOnboardingHandler Integration', () => {
         }); // Segunda atualização com paymentAccountId
 
       // Mock: criação de subconta no Asaas
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: 'cus_123456789',
-            name: 'João Silva',
-            email: 'contato@restaurante.com.br',
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: 'bank_123456789',
-          }),
-        });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'acc_123456789',
+          walletId: 'wallet_123456789',
+          name: 'João Silva',
+          email: 'contato@restaurante.com.br',
+        }),
+      });
 
       process.env.ASAAS_API_KEY = 'test-api-key';
+      process.env.ASAAS_WEBHOOK_BASE_URL = 'https://example.com';
 
       // 1. Inicia onboarding
       await handler.handle({
@@ -122,13 +126,10 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: mockFrom,
-          text: expect.stringContaining('Olá'),
-          text: expect.stringContaining('Nome do restaurante'),
-        })
-      );
+      const startMessage = sendMessageSpy.mock.calls[0][0];
+      expect(startMessage.to).toBe(mockFrom);
+      expect(startMessage.text).toContain('Olá');
+      expect(startMessage.text).toContain('Nome do restaurante');
 
       // 2. Nome
       sendMessageSpy.mockClear();
@@ -138,12 +139,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Nome registrado'),
-          text: expect.stringContaining('Endereço'),
-        })
-      );
+      const nameMessage = sendMessageSpy.mock.calls[0][0];
+      expect(nameMessage.text).toContain('Nome registrado');
+      expect(nameMessage.text).toContain('Endereço');
 
       // 3. Endereço
       sendMessageSpy.mockClear();
@@ -153,12 +151,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Endereço registrado'),
-          text: expect.stringContaining('Telefone'),
-        })
-      );
+      const addressMessage = sendMessageSpy.mock.calls[0][0];
+      expect(addressMessage.text).toContain('Endereço registrado');
+      expect(addressMessage.text).toContain('Telefone');
 
       // 4. Telefone
       sendMessageSpy.mockClear();
@@ -168,12 +163,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Telefone registrado'),
-          text: expect.stringContaining('Razão Social'),
-        })
-      );
+      const phoneMessage = sendMessageSpy.mock.calls[0][0];
+      expect(phoneMessage.text).toContain('Telefone registrado');
+      expect(phoneMessage.text).toContain('Razão Social');
 
       // 5. Razão Social
       sendMessageSpy.mockClear();
@@ -183,12 +175,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Razão social registrada'),
-          text: expect.stringContaining('CPF ou CNPJ'),
-        })
-      );
+      const legalNameMessage = sendMessageSpy.mock.calls[0][0];
+      expect(legalNameMessage.text).toContain('Razão social registrada');
+      expect(legalNameMessage.text).toContain('CPF ou CNPJ');
 
       // 6. CPF
       sendMessageSpy.mockClear();
@@ -198,12 +187,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('CPF registrado'),
-          text: expect.stringContaining('E-mail'),
-        })
-      );
+      const cpfMessage = sendMessageSpy.mock.calls[0][0];
+      expect(cpfMessage.text).toContain('CPF registrado');
+      expect(cpfMessage.text).toContain('E-mail');
 
       // 7. Email
       sendMessageSpy.mockClear();
@@ -213,13 +199,10 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('E-mail registrado'),
-          text: expect.stringContaining('Dados Bancários'),
-          text: expect.stringContaining('Código do Banco'),
-        })
-      );
+      const emailMessage = sendMessageSpy.mock.calls[0][0];
+      expect(emailMessage.text).toContain('E-mail registrado');
+      expect(emailMessage.text).toContain('Dados Bancários');
+      expect(emailMessage.text).toContain('Código do Banco');
 
       // 8. Dados Bancários - Código do Banco
       sendMessageSpy.mockClear();
@@ -229,12 +212,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Código do banco'),
-          text: expect.stringContaining('Agência'),
-        })
-      );
+      const bankCodeMessage = sendMessageSpy.mock.calls[0][0];
+      expect(bankCodeMessage.text).toContain('Código do banco');
+      expect(bankCodeMessage.text).toContain('Agência');
 
       // 9. Agência
       sendMessageSpy.mockClear();
@@ -244,12 +224,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Agência'),
-          text: expect.stringContaining('Número da Conta'),
-        })
-      );
+      const agencyMessage = sendMessageSpy.mock.calls[0][0];
+      expect(agencyMessage.text).toContain('Agência');
+      expect(agencyMessage.text).toContain('Número da Conta');
 
       // 10. Conta
       sendMessageSpy.mockClear();
@@ -259,12 +236,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Conta'),
-          text: expect.stringContaining('Dígito Verificador'),
-        })
-      );
+      const accountMessage = sendMessageSpy.mock.calls[0][0];
+      expect(accountMessage.text).toContain('Conta');
+      expect(accountMessage.text).toContain('Dígito Verificador');
 
       // 11. Dígito
       sendMessageSpy.mockClear();
@@ -274,12 +248,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Dígito verificador'),
-          text: expect.stringContaining('Tipo de Conta'),
-        })
-      );
+      const digitMessage = sendMessageSpy.mock.calls[0][0];
+      expect(digitMessage.text).toContain('Dígito verificador');
+      expect(digitMessage.text).toContain('Tipo de Conta');
 
       // 12. Tipo de Conta (1 = Corrente)
       sendMessageSpy.mockClear();
@@ -289,12 +260,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Tipo de conta'),
-          text: expect.stringContaining('Nome do Titular'),
-        })
-      );
+      const accountTypeMessage = sendMessageSpy.mock.calls[0][0];
+      expect(accountTypeMessage.text).toContain('Tipo de conta');
+      expect(accountTypeMessage.text).toContain('Nome do Titular');
 
       // 13. Nome do Titular
       sendMessageSpy.mockClear();
@@ -304,12 +272,9 @@ describe('RestaurantOnboardingHandler Integration', () => {
         pushName: mockPushName,
       } as any);
 
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Dados bancários registrados'),
-          text: expect.stringContaining('Documento do Responsável'),
-        })
-      );
+      const holderMessage = sendMessageSpy.mock.calls[0][0];
+      expect(holderMessage.text).toContain('Dados bancários registrados');
+      expect(holderMessage.text).toContain('Documento do Responsável');
 
       // 14. Pula documento (opcional)
       sendMessageSpy.mockClear();
@@ -322,17 +287,16 @@ describe('RestaurantOnboardingHandler Integration', () => {
       // Deve criar restaurante e subconta
       expect(prisma.restaurant.upsert).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/customers'),
+        expect.stringContaining('/accounts'),
         expect.any(Object)
       );
 
       // Deve mostrar mensagem de sucesso
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Restaurante cadastrado com sucesso'),
-          text: expect.stringContaining('acct_123456789'),
-        })
+      const successCall = sendMessageSpy.mock.calls.find(([call]) =>
+        call.text.includes('Restaurante cadastrado com sucesso')
       );
+      expect(successCall).toBeDefined();
+      expect(successCall?.[0].text).toContain('Conta de Pagamento');
     });
 
     it('should handle duplicate phone gracefully', async () => {
@@ -341,6 +305,12 @@ describe('RestaurantOnboardingHandler Integration', () => {
         name: 'Existing Restaurant',
         phone: '81999999999',
         address: 'Rua Existente, 456',
+        postalCode: '50000000',
+        addressNumber: '456',
+        complement: 'Sala 2',
+        province: 'Centro',
+        city: 'Recife',
+        state: 'PE',
         isActive: true,
         legalName: null,
         cpfCnpj: null,
@@ -385,6 +355,12 @@ describe('RestaurantOnboardingHandler Integration', () => {
         name: 'Restaurante Teste',
         phone: '81999999999',
         address: 'Rua das Flores, 123',
+        postalCode: '50000000',
+        addressNumber: '123',
+        complement: 'Sala 1',
+        province: 'Centro',
+        city: 'Recife',
+        state: 'PE',
         isActive: true,
         legalName: 'João Silva',
         cpfCnpj: '12345678900',
@@ -415,6 +391,7 @@ describe('RestaurantOnboardingHandler Integration', () => {
       });
 
       process.env.ASAAS_API_KEY = 'invalid-key';
+      process.env.ASAAS_WEBHOOK_BASE_URL = 'https://example.com';
 
       // Simula fluxo completo até documento
       await handler.handle({ from: mockFrom, text: 'quero me cadastrar' } as any);
@@ -440,12 +417,11 @@ describe('RestaurantOnboardingHandler Integration', () => {
 
       // Deve criar restaurante mesmo com erro na subconta
       expect(prisma.restaurant.upsert).toHaveBeenCalled();
-      expect(sendMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('Restaurante cadastrado'),
-          text: expect.stringContaining('houve um problema ao criar a conta de pagamento'),
-        })
+      const paymentErrorCall = sendMessageSpy.mock.calls.find(([call]) =>
+        call.text.includes('houve um problema ao criar a conta de pagamento')
       );
+      expect(paymentErrorCall).toBeDefined();
+      expect(paymentErrorCall?.[0].text).toContain('Restaurante cadastrado');
     });
   });
 

@@ -2,17 +2,29 @@ import { RestaurantOnboardingHandler } from '../../../../src/application/handler
 import { EvolutionApiService } from '../../../../src/infrastructure/messaging/EvolutionApiService';
 import { IRestaurantRepository } from '../../../../src/domain/repositories/IRestaurantRepository';
 import { IPaymentAccountService } from '../../../../src/domain/services/IPaymentAccountService';
+import { InMemoryConversationStateService } from '../../../../src/infrastructure/cache/InMemoryConversationStateService';
 import { Phone } from '../../../../src/domain/value-objects/Phone';
 import { Restaurant } from '../../../../src/domain/entities/Restaurant';
-import { OnboardingState } from '../../../../src/application/services/ConversationStateService';
 
 describe('RestaurantOnboardingHandler', () => {
   let handler: RestaurantOnboardingHandler;
   let mockEvolutionApi: jest.Mocked<EvolutionApiService>;
   let mockRestaurantRepository: jest.Mocked<IRestaurantRepository>;
   let mockPaymentAccountService: jest.Mocked<IPaymentAccountService>;
+  let conversationStateService: InMemoryConversationStateService;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
+    process.env.ASAAS_WEBHOOK_BASE_URL = 'https://example.com';
+
     mockEvolutionApi = {
       sendMessage: jest.fn().mockResolvedValue(undefined),
     } as any;
@@ -28,17 +40,25 @@ describe('RestaurantOnboardingHandler', () => {
     mockPaymentAccountService = {
       createSubAccount: jest.fn().mockResolvedValue({
         accountId: 'acct_123456789',
+        walletId: 'wallet_123456789',
         status: 'pending' as const,
       }),
       getAccountStatus: jest.fn(),
       updateBankAccount: jest.fn(),
     } as any;
 
+    conversationStateService = new InMemoryConversationStateService();
+
     handler = new RestaurantOnboardingHandler(
       mockEvolutionApi,
       mockRestaurantRepository,
+      conversationStateService,
       mockPaymentAccountService
     );
+  });
+
+  afterEach(() => {
+    delete process.env.ASAAS_WEBHOOK_BASE_URL;
   });
 
   describe('handle - start onboarding', () => {
@@ -134,6 +154,7 @@ describe('RestaurantOnboardingHandler', () => {
         id: 'rest_123',
         name: 'Existing',
         phone: existingPhone,
+        ...baseAddress,
         isActive: true,
       });
 
@@ -356,6 +377,7 @@ describe('RestaurantOnboardingHandler', () => {
         id: 'rest_123',
         name: 'Restaurante Teste',
         phone: Phone.create('81999999999'),
+        ...baseAddress,
         address: 'Rua das Flores, 123 - Centro',
         legalName: 'João Silva',
         cpfCnpj: '12345678900',
@@ -415,6 +437,7 @@ describe('RestaurantOnboardingHandler', () => {
         id: 'rest_123',
         name: 'Restaurante Teste',
         phone: Phone.create('81999999999'),
+        ...baseAddress,
         address: 'Rua das Flores, 123 - Centro',
         legalName: 'João Silva',
         cpfCnpj: '12345678900',
@@ -468,7 +491,8 @@ describe('RestaurantOnboardingHandler', () => {
     it('should complete onboarding even without payment account service', async () => {
       const handlerWithoutPayment = new RestaurantOnboardingHandler(
         mockEvolutionApi,
-        mockRestaurantRepository
+        mockRestaurantRepository,
+        conversationStateService
         // Sem paymentAccountService
       );
 
@@ -476,6 +500,7 @@ describe('RestaurantOnboardingHandler', () => {
         id: 'rest_123',
         name: 'Restaurante Teste',
         phone: Phone.create('81999999999'),
+        ...baseAddress,
         address: 'Rua das Flores, 123 - Centro',
         isActive: true,
       });

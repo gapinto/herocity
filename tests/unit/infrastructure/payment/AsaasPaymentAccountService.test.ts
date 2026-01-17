@@ -37,36 +37,36 @@ describe('AsaasPaymentAccountService', () => {
         accountHolderName: 'Restaurante Teste LTDA',
       },
       documentUrl: 'https://example.com/document.pdf',
+      address: 'Rua Teste, 123',
+      postalCode: '50000000',
+      addressNumber: '123',
+      complement: 'Sala 1',
+      province: 'Centro',
+      city: 'Recife',
+      state: 'PE',
     };
 
     it('should create sub-account successfully for CNPJ', async () => {
-      const mockCustomerResponse = {
-        id: 'cus_123456789',
+      const mockAccountResponse = {
+        id: 'acc_123456789',
+        walletId: 'wallet_123456789',
         name: mockInput.legalName,
         email: mockInput.email,
       };
 
-      const mockBankAccountResponse = {
-        id: 'bank_123456789',
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockCustomerResponse,
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockBankAccountResponse,
-        });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAccountResponse,
+      });
 
       const result = await service.createSubAccount(mockInput);
 
-      expect(result.accountId).toBe('cus_123456789');
+      expect(result.accountId).toBe('acc_123456789');
+      expect(result.walletId).toBe('wallet_123456789');
       expect(result.status).toBe('pending');
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/customers`,
+        `${mockBaseUrl}/accounts`,
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -75,35 +75,40 @@ describe('AsaasPaymentAccountService', () => {
           body: expect.stringContaining('JURIDICA'),
         })
       );
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/accounts`,
+        expect.objectContaining({
+          body: expect.stringContaining(mockInput.postalCode),
+        })
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/accounts`,
+        expect.objectContaining({
+          body: expect.stringContaining(mockInput.city),
+        })
+      );
     });
 
     it('should create sub-account successfully for CPF', async () => {
       const cpfInput = { ...mockInput, cpfCnpj: '12345678900' };
-      const mockCustomerResponse = {
-        id: 'cus_987654321',
+      const mockAccountResponse = {
+        id: 'acc_987654321',
+        walletId: 'wallet_987654321',
         name: cpfInput.legalName,
         email: cpfInput.email,
       };
 
-      const mockBankAccountResponse = {
-        id: 'bank_987654321',
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockCustomerResponse,
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockBankAccountResponse,
-        });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAccountResponse,
+      });
 
       const result = await service.createSubAccount(cpfInput);
 
-      expect(result.accountId).toBe('cus_987654321');
+      expect(result.accountId).toBe('acc_987654321');
+      expect(result.walletId).toBe('wallet_987654321');
       expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/customers`,
+        `${mockBaseUrl}/accounts`,
         expect.objectContaining({
           body: expect.stringContaining('FISICA'),
         })
@@ -123,33 +128,27 @@ describe('AsaasPaymentAccountService', () => {
       );
     });
 
-    it('should handle error when creating bank account', async () => {
-      const mockCustomerResponse = {
-        id: 'cus_123456789',
+    it('should handle account creation response without bank account update', async () => {
+      const mockAccountResponse = {
+        id: 'acc_123456789',
+        walletId: 'wallet_123456789',
       };
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockCustomerResponse,
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({
-            errors: [{ description: 'Invalid bank account' }],
-          }),
-        });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAccountResponse,
+      });
 
-      // Bank account error não deve lançar exceção (apenas retorna false)
       const result = await service.createSubAccount(mockInput);
-      expect(result.accountId).toBe('cus_123456789');
+      expect(result.accountId).toBe('acc_123456789');
+      expect(result.walletId).toBe('wallet_123456789');
     });
   });
 
   describe('getAccountStatus', () => {
     it('should return approved status', async () => {
       const mockResponse = {
-        id: 'cus_123456789',
+        id: 'acc_123456789',
         status: 'ACTIVE',
       };
 
@@ -158,14 +157,14 @@ describe('AsaasPaymentAccountService', () => {
         json: async () => mockResponse,
       });
 
-      const result = await service.getAccountStatus('cus_123456789');
+      const result = await service.getAccountStatus('acc_123456789');
 
       expect(result).toBe('approved');
     });
 
     it('should return rejected status when account has errors', async () => {
       const mockResponse = {
-        id: 'cus_123456789',
+        id: 'acc_123456789',
         errors: [{ description: 'Account blocked' }],
       };
 
@@ -174,7 +173,7 @@ describe('AsaasPaymentAccountService', () => {
         json: async () => mockResponse,
       });
 
-      const result = await service.getAccountStatus('cus_123456789');
+      const result = await service.getAccountStatus('acc_123456789');
 
       expect(result).toBe('rejected');
     });
@@ -207,7 +206,7 @@ describe('AsaasPaymentAccountService', () => {
       });
 
       const result = await service.updateBankAccount(
-        'cus_123456789',
+        'acc_123456789',
         mockBankAccount,
         '12345678000190',
         true
@@ -215,7 +214,7 @@ describe('AsaasPaymentAccountService', () => {
 
       expect(result).toBe(true);
       expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/customers/cus_123456789/bankAccounts`,
+        `${mockBaseUrl}/accounts/acc_123456789/bankAccounts`,
         expect.objectContaining({
           method: 'POST',
           body: expect.stringContaining('JURIDICA'),
@@ -230,7 +229,7 @@ describe('AsaasPaymentAccountService', () => {
       });
 
       const result = await service.updateBankAccount(
-        'cus_123456789',
+        'acc_123456789',
         mockBankAccount
       );
 

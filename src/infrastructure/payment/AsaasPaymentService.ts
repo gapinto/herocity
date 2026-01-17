@@ -66,7 +66,7 @@ export class AsaasPaymentService implements IPaymentService {
           fixedValue: request.splitConfig.platformFee / 100,
         },
         {
-          walletId: request.splitConfig.restaurantId,
+          walletId: request.splitConfig.restaurantWalletId,
           totalValue: request.splitConfig.restaurantAmount / 100,
         },
       ];
@@ -133,7 +133,7 @@ export class AsaasPaymentService implements IPaymentService {
           fixedValue: request.splitConfig.platformFee / 100,
         },
         {
-          walletId: request.splitConfig.restaurantId,
+          walletId: request.splitConfig.restaurantWalletId,
           totalValue: request.splitConfig.restaurantAmount / 100,
         },
       ];

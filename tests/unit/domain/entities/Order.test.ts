@@ -14,7 +14,7 @@ describe('Order', () => {
     expect(order.getRestaurantId()).toBe('restaurant-123');
     expect(order.getCustomerId()).toBe('customer-123');
     expect(order.getTotal().equals(total)).toBe(true);
-    expect(order.getStatus()).toBe(OrderStatus.PENDING);
+    expect(order.getStatus()).toBe(OrderStatus.DRAFT);
   });
 
   it('should update order status', () => {

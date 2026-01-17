@@ -2,7 +2,7 @@ export type PaymentMethod = 'pix' | 'card';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
 
 export interface SplitConfig {
-  restaurantId: string;
+  restaurantWalletId: string;
   restaurantAmount: number; // em centavos
   platformFee: number; // em centavos
 }

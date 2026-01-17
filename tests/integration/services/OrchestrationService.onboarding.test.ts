@@ -6,11 +6,9 @@ import { RestaurantOnboardingHandler } from '../../../src/application/handlers/R
 import { RestaurantManagementHandler } from '../../../src/application/handlers/RestaurantManagementHandler';
 import { CustomerOrdersHandler } from '../../../src/application/handlers/CustomerOrdersHandler';
 import { IActiveConversationService } from '../../../src/domain/services/IActiveConversationService';
-import { IIdempotencyService } from '../../../src/domain/services/IIdempotencyService';
 import { InMemoryIdempotencyService } from '../../../src/infrastructure/cache/InMemoryIdempotencyService';
 import { UserContext } from '../../../src/domain/enums/UserContext';
 import { Intent } from '../../../src/domain/enums/Intent';
-import { MetricsService } from '../../../src/application/services/MetricsService';
 import { Restaurant } from '../../../src/domain/entities/Restaurant';
 import { Phone } from '../../../src/domain/value-objects/Phone';
 
@@ -23,7 +21,15 @@ describe('OrchestrationService - Onboarding', () => {
   let mockRestaurantManagementHandler: jest.Mocked<RestaurantManagementHandler>;
   let mockCustomerOrdersHandler: jest.Mocked<CustomerOrdersHandler>;
   let mockActiveConversationService: jest.Mocked<IActiveConversationService>;
-  let mockMetricsService: jest.Mocked<MetricsService>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     mockUserContextService = {
@@ -58,15 +64,6 @@ describe('OrchestrationService - Onboarding', () => {
       cleanup: jest.fn().mockResolvedValue(undefined),
     } as any;
 
-    mockMetricsService = {
-      startTimer: jest.fn(),
-      endTimer: jest.fn(),
-      recordIntentIdentified: jest.fn(),
-    } as any;
-
-    // Mock MetricsService.getInstance
-    jest.spyOn(MetricsService, 'getInstance').mockReturnValue(mockMetricsService);
-
     orchestrationService = new OrchestrationService(
       mockUserContextService,
       mockIntentService,
@@ -91,6 +88,7 @@ describe('OrchestrationService - Onboarding', () => {
         id: 'rest-123',
         name: 'Restaurante Teste',
         phone: Phone.create(from),
+        ...baseAddress,
         isActive: true,
       });
 
@@ -185,6 +183,7 @@ describe('OrchestrationService - Onboarding', () => {
         id: 'rest-456',
         name: 'Outro Restaurante',
         phone: Phone.create(from),
+        ...baseAddress,
         isActive: true,
       });
 

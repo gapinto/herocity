@@ -4,6 +4,7 @@ import { IOrderRepository } from '../../../src/domain/repositories/IOrderReposit
 import { IMenuItemRepository } from '../../../src/domain/repositories/IMenuItemRepository';
 import { NotificationService } from '../../../src/application/services/NotificationService';
 import { UpdateMenuItem } from '../../../src/domain/usecases/UpdateMenuItem';
+import { CreateMenuItem } from '../../../src/domain/usecases/CreateMenuItem';
 import { Intent } from '../../../src/domain/enums/Intent';
 import { UserContext } from '../../../src/domain/enums/UserContext';
 import { OrderStatus } from '../../../src/domain/enums/OrderStatus';
@@ -16,6 +17,7 @@ describe('RestaurantManagementHandler Integration', () => {
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let notificationService: jest.Mocked<NotificationService>;
   let updateMenuItem: jest.Mocked<UpdateMenuItem>;
+  let createMenuItem: jest.Mocked<CreateMenuItem>;
 
   beforeEach(() => {
     evolutionApi = {
@@ -29,6 +31,7 @@ describe('RestaurantManagementHandler Integration', () => {
       findByCustomerId: jest.fn(),
       findByStatus: jest.fn(),
       findByRestaurantAndStatus: jest.fn(),
+      findByPaymentId: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
     } as any;
@@ -53,12 +56,17 @@ describe('RestaurantManagementHandler Integration', () => {
       execute: jest.fn(),
     } as any;
 
+    createMenuItem = {
+      execute: jest.fn(),
+    } as any;
+
     handler = new RestaurantManagementHandler(
       evolutionApi,
       orderRepository,
       menuItemRepository,
       notificationService,
-      updateMenuItem
+      updateMenuItem,
+      createMenuItem
     );
   });
 

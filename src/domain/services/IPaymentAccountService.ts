@@ -18,6 +18,13 @@ export interface CreatePaymentAccountInput {
   province: string;
   city: string;
   state: string;
+  loginEmail?: string;
+  birthDate?: string;
+  site?: string;
+  incomeValue?: number;
+  webhookUrl?: string;
+  webhookAuthToken?: string;
+  webhookEvents?: string[];
 }
 
 /**
@@ -25,6 +32,7 @@ export interface CreatePaymentAccountInput {
  */
 export interface PaymentAccountResponse {
   accountId: string; // ID da subconta criada (ex: "acct_29384")
+  walletId?: string; // ID da carteira (walletId) retornado pelo Asaas
   status: 'pending' | 'approved' | 'rejected'; // Status da conta
   requiresAdditionalInfo?: boolean; // Se precisa de informações adicionais
 }

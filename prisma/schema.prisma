@@ -31,6 +31,9 @@ model Restaurant {
   
   // ID da subconta criada no provedor de pagamento (Asaas/Stripe)
   paymentAccountId String?  @unique // ID da subconta (ex: "acct_29384")
+  paymentWalletId  String?  @unique // ID da carteira (walletId)
+  paymentWebhookUrl   String? // URL do webhook da subconta
+  paymentWebhookToken String? // Token de autenticação do webhook
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

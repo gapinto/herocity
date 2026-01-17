@@ -10,6 +10,8 @@ import { UserContext } from '../../../src/domain/enums/UserContext';
 import { Restaurant } from '../../../src/domain/entities/Restaurant';
 import { Phone } from '../../../src/domain/value-objects/Phone';
 import { CreateMenuItem } from '../../../src/domain/usecases/CreateMenuItem';
+import { MenuItem } from '../../../src/domain/entities/MenuItem';
+import { Price } from '../../../src/domain/value-objects/Price';
 
 describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
   let handler: RestaurantManagementHandler;
@@ -19,6 +21,15 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
   let mockNotificationService: jest.Mocked<NotificationService>;
   let mockUpdateMenuItem: jest.Mocked<UpdateMenuItem>;
   let mockCreateMenuItem: jest.Mocked<CreateMenuItem>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     mockEvolutionApi = {
@@ -37,7 +48,15 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
     mockNotificationService = {} as any;
     mockUpdateMenuItem = {} as any;
     mockCreateMenuItem = {
-      execute: jest.fn().mockResolvedValue({} as any),
+      execute: jest.fn().mockResolvedValue(
+        MenuItem.create({
+          id: 'item-123',
+          restaurantId: 'rest-123',
+          name: 'Pizza Portuguesa',
+          price: Price.create(35.0),
+          isAvailable: true,
+        })
+      ),
     } as any;
 
     // Criar handler sem CreateMenuItem primeiro, depois adicionar
@@ -58,6 +77,7 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
         id: 'rest-123',
         name: 'Restaurante Teste',
         phone: Phone.create('81973129000'),
+        ...baseAddress,
         isActive: true,
       });
 
@@ -110,6 +130,7 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
         id: 'rest-123',
         name: 'Restaurante Teste',
         phone: Phone.create('81973129000'),
+        ...baseAddress,
         isActive: true,
       });
 
@@ -122,11 +143,15 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
         intent: Intent.CADASTRAR_ITEM_CARDAPIO,
       };
 
-      mockCreateMenuItem.execute.mockResolvedValue({
-        id: 'item-123',
-        name: 'Pizza Portuguesa',
-        price: 35.0,
-      } as any);
+      mockCreateMenuItem.execute.mockResolvedValue(
+        MenuItem.create({
+          id: 'item-123',
+          restaurantId: restaurant.getId(),
+          name: 'Pizza Portuguesa',
+          price: Price.create(35.0),
+          isAvailable: true,
+        })
+      );
 
       // Act
       await handler.handle(Intent.CADASTRAR_ITEM_CARDAPIO, messageData);
@@ -153,6 +178,7 @@ describe('RestaurantManagementHandler - Cadastro de Cardápio', () => {
         id: 'rest-123',
         name: 'Restaurante Teste',
         phone: Phone.create('81973129000'),
+        ...baseAddress,
         isActive: true,
       });
 

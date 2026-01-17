@@ -32,6 +32,9 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
       bankAccount: (data.bankAccount as any) || undefined,
       documentUrl: data.documentUrl || undefined,
       paymentAccountId: data.paymentAccountId || undefined,
+      paymentWalletId: data.paymentWalletId || undefined,
+      paymentWebhookUrl: data.paymentWebhookUrl || undefined,
+      paymentWebhookToken: data.paymentWebhookToken || undefined,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     });
@@ -63,6 +66,9 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
       bankAccount: (data.bankAccount as any) || undefined,
       documentUrl: data.documentUrl || undefined,
       paymentAccountId: data.paymentAccountId || undefined,
+      paymentWalletId: data.paymentWalletId || undefined,
+      paymentWebhookUrl: data.paymentWebhookUrl || undefined,
+      paymentWebhookToken: data.paymentWebhookToken || undefined,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     });
@@ -93,6 +99,9 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
         bankAccount: (item.bankAccount as any) || undefined,
         documentUrl: item.documentUrl || undefined,
         paymentAccountId: item.paymentAccountId || undefined,
+        paymentWalletId: item.paymentWalletId || undefined,
+        paymentWebhookUrl: item.paymentWebhookUrl || undefined,
+        paymentWebhookToken: item.paymentWebhookToken || undefined,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })
@@ -118,6 +127,9 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
       bankAccount: restaurant.getBankAccount() ?? null,
       documentUrl: restaurant.getDocumentUrl() ?? null,
       paymentAccountId: restaurant.getPaymentAccountId() ?? null,
+      paymentWalletId: restaurant.getPaymentWalletId() ?? null,
+      paymentWebhookUrl: restaurant.getPaymentWebhookUrl() ?? null,
+      paymentWebhookToken: restaurant.getPaymentWebhookToken() ?? null,
     };
 
     // Usa phone como chave única para upsert (phone é @unique no schema)
@@ -152,6 +164,9 @@ export class PrismaRestaurantRepository implements IRestaurantRepository {
       bankAccount: (saved.bankAccount as any) || undefined,
       documentUrl: saved.documentUrl || undefined,
       paymentAccountId: saved.paymentAccountId || undefined,
+      paymentWalletId: saved.paymentWalletId || undefined,
+      paymentWebhookUrl: saved.paymentWebhookUrl || undefined,
+      paymentWebhookToken: saved.paymentWebhookToken || undefined,
       createdAt: saved.createdAt,
       updatedAt: saved.updatedAt,
     });

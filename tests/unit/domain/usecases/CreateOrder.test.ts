@@ -16,6 +16,15 @@ describe('CreateOrder', () => {
   let menuItemRepository: jest.Mocked<IMenuItemRepository>;
   let restaurantRepository: jest.Mocked<IRestaurantRepository>;
   let orderItemRepository: jest.Mocked<IOrderItemRepository>;
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
 
   beforeEach(() => {
     orderRepository = {
@@ -24,6 +33,7 @@ describe('CreateOrder', () => {
       findByCustomerId: jest.fn(),
       findByStatus: jest.fn(),
       findByRestaurantAndStatus: jest.fn(),
+      findByPaymentId: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
     };
@@ -65,6 +75,7 @@ describe('CreateOrder', () => {
       id: 'restaurant-123',
       name: 'Restaurante Teste',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       isActive: true,
     });
 
@@ -129,6 +140,7 @@ describe('CreateOrder', () => {
       id: 'restaurant-123',
       name: 'Restaurante Teste',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       isActive: true,
     });
 

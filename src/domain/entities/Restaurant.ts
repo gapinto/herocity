@@ -22,6 +22,9 @@ export interface RestaurantProps {
   bankAccount?: BankAccountData; // Dados bancários
   documentUrl?: string; // URL do documento do responsável (upload)
   paymentAccountId?: string; // ID da subconta criada no provedor (ex: "acct_29384")
+  paymentWalletId?: string; // ID da carteira (walletId) para split
+  paymentWebhookUrl?: string; // URL do webhook da subconta
+  paymentWebhookToken?: string; // Token de autenticação do webhook
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -46,6 +49,9 @@ export class Restaurant {
   private bankAccount?: BankAccountData; // Dados bancários
   private documentUrl?: string; // URL do documento do responsável
   private paymentAccountId?: string; // ID da subconta criada no provedor
+  private paymentWalletId?: string; // ID da carteira (walletId)
+  private paymentWebhookUrl?: string; // URL do webhook da subconta
+  private paymentWebhookToken?: string; // Token do webhook
   private createdAt: Date;
   private updatedAt: Date;
 
@@ -68,6 +74,9 @@ export class Restaurant {
     this.bankAccount = props.bankAccount;
     this.documentUrl = props.documentUrl;
     this.paymentAccountId = props.paymentAccountId;
+    this.paymentWalletId = props.paymentWalletId;
+    this.paymentWebhookUrl = props.paymentWebhookUrl;
+    this.paymentWebhookToken = props.paymentWebhookToken;
     this.createdAt = props.createdAt || new Date();
     this.updatedAt = props.updatedAt || new Date();
   }
@@ -84,11 +93,11 @@ export class Restaurant {
     props: Required<
       Omit<
         RestaurantProps,
-        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'
+        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'
       >
     > &
       Partial<
-        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'>
+        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'paymentWalletId' | 'paymentWebhookUrl' | 'paymentWebhookToken' | 'menuRules'>
       >
   ): Restaurant {
     return new Restaurant(props);
@@ -185,6 +194,18 @@ export class Restaurant {
     return this.paymentAccountId;
   }
 
+  getPaymentWalletId(): string | undefined {
+    return this.paymentWalletId;
+  }
+
+  getPaymentWebhookUrl(): string | undefined {
+    return this.paymentWebhookUrl;
+  }
+
+  getPaymentWebhookToken(): string | undefined {
+    return this.paymentWebhookToken;
+  }
+
   // Verifica se restaurante tem todos os dados necessários para criar subconta
   hasPaymentAccountData(): boolean {
     const hasAddressData = !!(
@@ -225,6 +246,17 @@ export class Restaurant {
     this.updatedAt = new Date();
   }
 
+  setPaymentWalletId(walletId: string): void {
+    this.paymentWalletId = walletId;
+    this.updatedAt = new Date();
+  }
+
+  setPaymentWebhookConfig(webhookUrl: string, webhookToken: string): void {
+    this.paymentWebhookUrl = webhookUrl;
+    this.paymentWebhookToken = webhookToken;
+    this.updatedAt = new Date();
+  }
+
   // Atualiza dados de pagamento
   updatePaymentData(data: {
     legalName?: string;
@@ -232,6 +264,10 @@ export class Restaurant {
     email?: string;
     bankAccount?: BankAccountData;
     documentUrl?: string;
+    paymentAccountId?: string;
+    paymentWalletId?: string;
+    paymentWebhookUrl?: string;
+    paymentWebhookToken?: string;
     address?: string;
     postalCode?: string;
     addressNumber?: string;
@@ -245,6 +281,10 @@ export class Restaurant {
     if (data.email !== undefined) this.email = data.email;
     if (data.bankAccount !== undefined) this.bankAccount = data.bankAccount;
     if (data.documentUrl !== undefined) this.documentUrl = data.documentUrl;
+    if (data.paymentAccountId !== undefined) this.paymentAccountId = data.paymentAccountId;
+    if (data.paymentWalletId !== undefined) this.paymentWalletId = data.paymentWalletId;
+    if (data.paymentWebhookUrl !== undefined) this.paymentWebhookUrl = data.paymentWebhookUrl;
+    if (data.paymentWebhookToken !== undefined) this.paymentWebhookToken = data.paymentWebhookToken;
     if (data.address !== undefined) this.address = data.address;
     if (data.postalCode !== undefined) this.postalCode = data.postalCode;
     if (data.addressNumber !== undefined) this.addressNumber = data.addressNumber;

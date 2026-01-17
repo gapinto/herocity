@@ -25,11 +25,15 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
       const payload: any = {
         name: input.legalName || input.name,
         email: input.email,
+        loginEmail: input.loginEmail || input.email,
         phone: input.phone.replace(/\D/g, ''),
         mobilePhone: input.phone.replace(/\D/g, ''),
         cpfCnpj: documentNumber,
         personType: isCnpj ? 'JURIDICA' : 'FISICA',
         companyType: isCnpj ? 'MEI' : undefined, // Pode ser MEI, EI, LTDA, etc. - assumindo MEI por padrão
+        birthDate: input.birthDate,
+        site: input.site,
+        incomeValue: input.incomeValue,
         postalCode: input.postalCode,
         address: input.address,
         addressNumber: input.addressNumber,
@@ -39,6 +43,45 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         state: input.state,
       };
 
+      if (input.bankAccount) {
+        payload.bankAccount = {
+          bank: input.bankAccount.bankCode,
+          agency: input.bankAccount.agency,
+          account: input.bankAccount.account,
+          accountDigit: input.bankAccount.accountDigit,
+          bankAccountType: input.bankAccount.accountType === 'SAVINGS' ? 'SAVINGS_ACCOUNT' : 'CHECKING_ACCOUNT',
+          name: input.bankAccount.accountHolderName,
+          cpfCnpj: documentNumber,
+        };
+      }
+
+      if (input.webhookUrl && input.webhookAuthToken) {
+        payload.webhooks = [
+          {
+            name: 'HeroCity Webhook',
+            url: input.webhookUrl,
+            email: input.email,
+            enabled: true,
+            interrupted: false,
+            apiVersion: 3,
+            authToken: input.webhookAuthToken,
+            sendType: 'SEQUENTIALLY',
+            events: input.webhookEvents || [
+              'PAYMENT_CREATED',
+              'PAYMENT_RECEIVED',
+              'PAYMENT_CONFIRMED',
+              'PAYMENT_OVERDUE',
+              'PAYMENT_SPLIT_DONE',
+              'PAYMENT_SPLIT_DIVERGENCE_BLOCK',
+              'PAYMENT_SPLIT_DIVERGENCE_BLOCK_FINISHED',
+              'PAYMENT_SPLIT_REFUSED',
+              'PAYMENT_SPLIT_CANCELLED',
+              'PAYMENT_SPLIT_REFUNDED',
+            ],
+          },
+        ];
+      }
+
       // Remove campos undefined
       Object.keys(payload).forEach((key) => {
         if (payload[key] === undefined) {
@@ -46,8 +89,8 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         }
       });
 
-      // Cria cliente no Asaas (subconta)
-      const response = await fetch(`${this.baseUrl}/customers`, {
+      // Cria conta no Asaas (subconta)
+      const response = await fetch(`${this.baseUrl}/accounts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,13 +114,9 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
 
       const data = await response.json() as any;
 
-      // Agora cria conta bancária para o cliente (com CPF/CNPJ do titular)
-      if (input.bankAccount) {
-        await this.updateBankAccount(data.id, input.bankAccount, documentNumber, isCnpj);
-      }
-
       return {
         accountId: data.id,
+        walletId: data.walletId,
         status: 'pending' as const, // Asaas geralmente aprova automaticamente, mas pode exigir verificação
         requiresAdditionalInfo: !data.postalCode || !data.address, // Se faltar endereço, precisa completar
       };
@@ -89,7 +128,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
 
   async getAccountStatus(accountId: string): Promise<'pending' | 'approved' | 'rejected'> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers/${accountId}`, {
+      const response = await fetch(`${this.baseUrl}/accounts/${accountId}`, {
         headers: {
           'access_token': this.apiKey,
         },
@@ -133,7 +172,7 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         payload.bankAccountHolderType = isCnpj ? 'JURIDICA' : 'FISICA';
       }
 
-      const response = await fetch(`${this.baseUrl}/customers/${accountId}/bankAccounts`, {
+      const response = await fetch(`${this.baseUrl}/accounts/${accountId}/bankAccounts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

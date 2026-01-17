@@ -8,6 +8,7 @@ import { IConversationStateService } from '../../domain/services/IConversationSt
 import { IPaymentAccountService } from '../../domain/services/IPaymentAccountService';
 import { BankAccountData } from '../../domain/types/BankAccount';
 import { logger } from '../../shared/utils/logger';
+import { createAsaasWebhookConfig } from '../../shared/utils/asaasWebhook';
 
 export class RestaurantOnboardingHandler {
   private bankAccountStep: number = 0; // Para controlar múltiplas etapas de dados bancários
@@ -575,6 +576,7 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
         });
 
         try {
+          const webhookConfig = createAsaasWebhookConfig(saved.getId());
           const paymentAccountResponse = await this.paymentAccountService.createSubAccount({
             legalName: conversation.legalName,
             cpfCnpj: conversation.cpfCnpj,
@@ -590,10 +592,16 @@ Ou digite "pular" para continuar sem enviar documento (pode enviar depois).`,
             province: '',
             city: '',
             state: '',
+            webhookUrl: webhookConfig.url,
+            webhookAuthToken: webhookConfig.authToken,
           });
 
           // Atualiza restaurante com paymentAccountId
           saved.setPaymentAccountId(paymentAccountResponse.accountId);
+          if (paymentAccountResponse.walletId) {
+            saved.setPaymentWalletId(paymentAccountResponse.walletId);
+          }
+          saved.setPaymentWebhookConfig(webhookConfig.url, webhookConfig.authToken);
           await this.restaurantRepository.save(saved);
 
           logger.info('Payment account created successfully', {

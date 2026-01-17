@@ -43,11 +43,17 @@ export function createServer(
   }
 
   // Payment webhook routes
-  if (dependencies?.paymentService && dependencies?.orderRepository && dependencies?.notificationService) {
+  if (
+    dependencies?.paymentService &&
+    dependencies?.orderRepository &&
+    dependencies?.notificationService &&
+    restaurantRepository
+  ) {
     const paymentWebhookRoutes = createPaymentWebhookRoutes(
       dependencies.paymentService,
       dependencies.orderRepository,
       dependencies.notificationService,
+      restaurantRepository,
       dependencies.idempotencyService
     );
     app.use('/api', paymentWebhookRoutes);

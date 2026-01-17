@@ -2,10 +2,21 @@ import { Restaurant } from '../../../../src/domain/entities/Restaurant';
 import { Phone } from '../../../../src/domain/value-objects/Phone';
 
 describe('Restaurant', () => {
+  const baseAddress = {
+    address: 'Rua Teste, 123',
+    postalCode: '50000000',
+    addressNumber: '123',
+    complement: 'Sala 1',
+    province: 'Centro',
+    city: 'Recife',
+    state: 'PE',
+  };
+
   it('should create restaurant', () => {
     const restaurant = Restaurant.create({
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
     });
 
     expect(restaurant.getName()).toBe('Test Restaurant');
@@ -28,6 +39,7 @@ describe('Restaurant', () => {
     const restaurant = Restaurant.create({
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       menuRules,
     });
 
@@ -38,6 +50,7 @@ describe('Restaurant', () => {
     const restaurant = Restaurant.create({
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
     });
 
     expect(restaurant.getMenuRules()).toBeUndefined();
@@ -59,6 +72,7 @@ describe('Restaurant', () => {
       id: 'rest-123',
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
       isActive: true,
       menuRules,
       createdAt: new Date(),
@@ -72,6 +86,7 @@ describe('Restaurant', () => {
     const restaurant = Restaurant.create({
       name: 'Test Restaurant',
       phone: Phone.create('81999999999'),
+      ...baseAddress,
     });
 
     expect(restaurant.isActive()).toBe(true);
@@ -81,5 +96,29 @@ describe('Restaurant', () => {
 
     restaurant.activate();
     expect(restaurant.isActive()).toBe(true);
+  });
+
+  it('should require address data for payment account', () => {
+    const restaurant = Restaurant.create({
+      name: 'Test Restaurant',
+      phone: Phone.create('81999999999'),
+      ...baseAddress,
+      legalName: 'Teste LTDA',
+      cpfCnpj: '12345678000190',
+      email: 'contato@restaurante.com.br',
+      bankAccount: {
+        bankCode: '001',
+        agency: '1234',
+        account: '567890',
+        accountDigit: '1',
+        accountType: 'CHECKING',
+        accountHolderName: 'Teste LTDA',
+      },
+    });
+
+    expect(restaurant.hasPaymentAccountData()).toBe(true);
+
+    restaurant.updatePaymentData({ postalCode: '' });
+    expect(restaurant.hasPaymentAccountData()).toBe(false);
   });
 });

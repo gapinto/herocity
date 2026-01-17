@@ -22,6 +22,7 @@ import { MenuItem } from '../../domain/entities/MenuItem';
 import { Restaurant } from '../../domain/entities/Restaurant';
 import { metricsService } from '../../application/services/MetricsService';
 import { OnboardingData, OnboardingState } from '../../application/services/ConversationStateService';
+import { createAsaasWebhookConfig } from '../../shared/utils/asaasWebhook';
 
 export interface McpDependencies {
   restaurantRepository: IRestaurantRepository;
@@ -145,6 +146,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
             address: existing.getAddress(),
             is_active: existing.isActive(),
             payment_account_id: existing.getPaymentAccountId(),
+            payment_wallet_id: existing.getPaymentWalletId(),
           },
           created: false,
         };
@@ -183,6 +185,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           state: saved.getState(),
           is_active: saved.isActive(),
           payment_account_id: saved.getPaymentAccountId(),
+          payment_wallet_id: saved.getPaymentWalletId(),
         },
         created: true,
       };
@@ -213,6 +216,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           id: saved.getId(),
           name: saved.getName(),
           payment_account_id: saved.getPaymentAccountId(),
+          payment_wallet_id: saved.getPaymentWalletId(),
           legal_name: saved.getLegalName(),
           cpf_cnpj: saved.getCpfCnpj(),
           email: saved.getEmail(),
@@ -238,6 +242,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         throw new Error('Restaurant missing payment account data');
       }
 
+      const webhookConfig = createAsaasWebhookConfig(restaurant.getId());
       const result = await deps.paymentAccountService.createSubAccount({
         legalName: restaurant.getLegalName() as string,
         cpfCnpj: restaurant.getCpfCnpj() as string,
@@ -253,14 +258,21 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         province: restaurant.getProvince(),
         city: restaurant.getCity(),
         state: restaurant.getState(),
+        webhookUrl: webhookConfig.url,
+        webhookAuthToken: webhookConfig.authToken,
       });
 
       restaurant.setPaymentAccountId(result.accountId);
+      if (result.walletId) {
+        restaurant.setPaymentWalletId(result.walletId);
+      }
+      restaurant.setPaymentWebhookConfig(webhookConfig.url, webhookConfig.authToken);
       await deps.restaurantRepository.save(restaurant);
 
       return {
         restaurant_id: restaurant.getId(),
         payment_account_id: result.accountId,
+        payment_wallet_id: result.walletId,
         status: result.status,
       };
     },
@@ -369,6 +381,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           is_active: restaurant.isActive(),
           menu_rules: restaurant.getMenuRules(),
           payment_account_id: restaurant.getPaymentAccountId(),
+          payment_wallet_id: restaurant.getPaymentWalletId(),
         },
       };
     },
@@ -391,6 +404,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
           is_active: restaurant.isActive(),
           menu_rules: restaurant.getMenuRules(),
           payment_account_id: restaurant.getPaymentAccountId(),
+          payment_wallet_id: restaurant.getPaymentWalletId(),
         },
       };
     },
@@ -544,8 +558,8 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
 
       const restaurant = await deps.restaurantRepository.findById(order.getRestaurantId());
       if (!restaurant) throw new Error('Restaurant not found');
-      if (!restaurant.getPaymentAccountId()) {
-        throw new Error('Restaurant payment account not configured');
+      if (!restaurant.getPaymentWalletId()) {
+        throw new Error('Restaurant payment wallet not configured');
       }
 
       const customer = await deps.customerRepository.findById(order.getCustomerId());
@@ -564,7 +578,7 @@ export function createMcpHandlers(deps: McpDependencies): Record<string, (params
         customerPhone: customer?.getPhone().getValue(),
         description: `Pedido ${order.getId().slice(0, 8)}`,
         splitConfig: {
-          restaurantId: restaurant.getPaymentAccountId() as string,
+          restaurantWalletId: restaurant.getPaymentWalletId() as string,
           platformFee,
           restaurantAmount,
         },

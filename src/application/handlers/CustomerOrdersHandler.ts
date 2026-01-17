@@ -594,10 +594,10 @@ Digite:
         throw new Error('Restaurant not found');
       }
 
-      // Verifica se restaurante tem conta de pagamento configurada
-      const restaurantPaymentAccountId = restaurant.getPaymentAccountId();
-      if (!restaurantPaymentAccountId) {
-        throw new Error('Restaurant payment account not configured. Please complete onboarding with payment provider registration.');
+      // Verifica se restaurante tem walletId configurado para split
+      const restaurantWalletId = restaurant.getPaymentWalletId();
+      if (!restaurantWalletId) {
+        throw new Error('Restaurant payment wallet not configured. Please complete onboarding with payment provider registration.');
       }
 
       // Calcula split (exemplo: 10% plataforma, 90% restaurante)
@@ -625,7 +625,7 @@ Digite:
         customerId: order.getCustomerId(),
         description: `Pedido #${order.getId().slice(0, 8)}`,
         splitConfig: {
-          restaurantId: restaurantPaymentAccountId,
+          restaurantWalletId,
           restaurantAmount,
           platformFee,
         },
