@@ -12,7 +12,13 @@ model Restaurant {
   id               String   @id @default(cuid())
   name             String   // Nome fantasia (exibição)
   phone            String   @unique
-  address          String?
+  address          String
+  postalCode       String
+  addressNumber    String
+  complement       String
+  province         String
+  city             String
+  state            String
   isActive         Boolean  @default(true)
   menuRules        Json?
   

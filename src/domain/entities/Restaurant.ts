@@ -6,7 +6,13 @@ export interface RestaurantProps {
   id?: string;
   name: string; // Nome fantasia (exibição)
   phone: Phone;
-  address?: string;
+  address: string;
+  postalCode: string;
+  addressNumber: string;
+  complement: string;
+  province: string;
+  city: string;
+  state: string;
   isActive?: boolean;
   menuRules?: MenuRulesConfig;
   // Dados para criação de subconta no provedor de pagamento
@@ -24,7 +30,13 @@ export class Restaurant {
   private id: string;
   private name: string; // Nome fantasia
   private phone: Phone;
-  private address?: string;
+  private address: string;
+  private postalCode: string;
+  private addressNumber: string;
+  private complement: string;
+  private province: string;
+  private city: string;
+  private state: string;
   private _isActive: boolean;
   private menuRules?: MenuRulesConfig;
   // Dados para criação de subconta no provedor de pagamento
@@ -42,6 +54,12 @@ export class Restaurant {
     this.name = props.name;
     this.phone = props.phone;
     this.address = props.address;
+    this.postalCode = props.postalCode;
+    this.addressNumber = props.addressNumber;
+    this.complement = props.complement;
+    this.province = props.province;
+    this.city = props.city;
+    this.state = props.state;
     this._isActive = props.isActive ?? true;
     this.menuRules = props.menuRules;
     this.legalName = props.legalName;
@@ -63,8 +81,15 @@ export class Restaurant {
   }
 
   static fromPersistence(
-    props: Required<Omit<RestaurantProps, 'address' | 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'>> & 
-    Partial<Pick<RestaurantProps, 'address' | 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'>>
+    props: Required<
+      Omit<
+        RestaurantProps,
+        'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'
+      >
+    > &
+      Partial<
+        Pick<RestaurantProps, 'legalName' | 'cpfCnpj' | 'email' | 'bankAccount' | 'documentUrl' | 'paymentAccountId' | 'menuRules'>
+      >
   ): Restaurant {
     return new Restaurant(props);
   }
@@ -81,8 +106,32 @@ export class Restaurant {
     return this.phone;
   }
 
-  getAddress(): string | undefined {
+  getAddress(): string {
     return this.address;
+  }
+
+  getPostalCode(): string {
+    return this.postalCode;
+  }
+
+  getAddressNumber(): string {
+    return this.addressNumber;
+  }
+
+  getComplement(): string {
+    return this.complement;
+  }
+
+  getProvince(): string {
+    return this.province;
+  }
+
+  getCity(): string {
+    return this.city;
+  }
+
+  getState(): string {
+    return this.state;
   }
 
   isActive(): boolean {
@@ -138,7 +187,25 @@ export class Restaurant {
 
   // Verifica se restaurante tem todos os dados necessários para criar subconta
   hasPaymentAccountData(): boolean {
+    const hasAddressData = !!(
+      this.address &&
+      this.address.trim().length > 0 &&
+      this.postalCode &&
+      this.postalCode.trim().length > 0 &&
+      this.addressNumber &&
+      this.addressNumber.trim().length > 0 &&
+      this.complement &&
+      this.complement.trim().length > 0 &&
+      this.province &&
+      this.province.trim().length > 0 &&
+      this.city &&
+      this.city.trim().length > 0 &&
+      this.state &&
+      this.state.trim().length > 0
+    );
+
     return !!(
+      hasAddressData &&
       this.legalName &&
       this.cpfCnpj &&
       this.email &&
@@ -165,12 +232,26 @@ export class Restaurant {
     email?: string;
     bankAccount?: BankAccountData;
     documentUrl?: string;
+    address?: string;
+    postalCode?: string;
+    addressNumber?: string;
+    complement?: string;
+    province?: string;
+    city?: string;
+    state?: string;
   }): void {
     if (data.legalName !== undefined) this.legalName = data.legalName;
     if (data.cpfCnpj !== undefined) this.cpfCnpj = data.cpfCnpj;
     if (data.email !== undefined) this.email = data.email;
     if (data.bankAccount !== undefined) this.bankAccount = data.bankAccount;
     if (data.documentUrl !== undefined) this.documentUrl = data.documentUrl;
+    if (data.address !== undefined) this.address = data.address;
+    if (data.postalCode !== undefined) this.postalCode = data.postalCode;
+    if (data.addressNumber !== undefined) this.addressNumber = data.addressNumber;
+    if (data.complement !== undefined) this.complement = data.complement;
+    if (data.province !== undefined) this.province = data.province;
+    if (data.city !== undefined) this.city = data.city;
+    if (data.state !== undefined) this.state = data.state;
     this.updatedAt = new Date();
   }
 }

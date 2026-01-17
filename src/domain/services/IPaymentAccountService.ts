@@ -11,6 +11,13 @@ export interface CreatePaymentAccountInput {
   name: string; // Nome fantasia (exibição)
   bankAccount: BankAccountData; // Dados bancários
   documentUrl?: string; // URL do documento do responsável (upload)
+  address: string;
+  postalCode: string;
+  addressNumber: string;
+  complement: string;
+  province: string;
+  city: string;
+  state: string;
 }
 
 /**

@@ -30,13 +30,13 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
         cpfCnpj: documentNumber,
         personType: isCnpj ? 'JURIDICA' : 'FISICA',
         companyType: isCnpj ? 'MEI' : undefined, // Pode ser MEI, EI, LTDA, etc. - assumindo MEI por padrão
-        postalCode: undefined, // Seria necessário adicionar endereço completo
-        address: undefined,
-        addressNumber: undefined,
-        complement: undefined,
-        province: undefined,
-        city: undefined,
-        state: undefined,
+        postalCode: input.postalCode,
+        address: input.address,
+        addressNumber: input.addressNumber,
+        complement: input.complement,
+        province: input.province,
+        city: input.city,
+        state: input.state,
       };
 
       // Remove campos undefined
