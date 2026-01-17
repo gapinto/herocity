@@ -71,12 +71,8 @@ export class AsaasPaymentAccountService implements IPaymentAccountService {
               'PAYMENT_RECEIVED',
               'PAYMENT_CONFIRMED',
               'PAYMENT_OVERDUE',
-              'PAYMENT_SPLIT_DONE',
               'PAYMENT_SPLIT_DIVERGENCE_BLOCK',
               'PAYMENT_SPLIT_DIVERGENCE_BLOCK_FINISHED',
-              'PAYMENT_SPLIT_REFUSED',
-              'PAYMENT_SPLIT_CANCELLED',
-              'PAYMENT_SPLIT_REFUNDED',
             ],
           },
         ];
